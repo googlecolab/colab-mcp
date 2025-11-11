@@ -184,6 +184,8 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "fastmcp" },
+    { name = "pydantic" },
+    { name = "requests" },
 ]
 
 [package.dev-dependencies]
@@ -198,7 +200,11 @@ dev = [
 ]
 
 [package.metadata]
-requires-dist = [{ name = "fastmcp", specifier = ">=2.2.0" }]
+requires-dist = [
+    { name = "fastmcp", specifier = ">=2.2.0" },
+    { name = "pydantic", specifier = ">=2.12.3" },
+    { name = "requests", specifier = ">=2.32.5" },
+]
 
 [package.metadata.requires-dev]
 commit = [{ name = "pre-commit", specifier = ">=4.3.0" }]
