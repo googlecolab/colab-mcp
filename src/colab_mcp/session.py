@@ -7,7 +7,6 @@ from fastmcp.client.transports import ClientTransport
 from fastmcp.server.middleware import Middleware, MiddlewareContext
 from fastmcp.server.proxy import FastMCPProxy
 from mcp.client.session import ClientSession
-from fastmcp.client.client import Client
 
 from colab_mcp.websocket_server import ColabWebSocketServer
 
