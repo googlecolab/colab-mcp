@@ -1,15 +1,9 @@
 import asyncio
-from unittest import mock
-import fastmcp
 from colab_mcp import session
-import mcp.types as types
-from fastmcp.server.middleware import MiddlewareContext
-from mcp.client.session import ClientSession
-import websockets
 from colab_mcp.websocket_server import ColabWebSocketServer
-import socket
-from contextlib import closing
+from fastmcp.server.middleware import MiddlewareContext
 
+from unittest import mock
 import pytest
 
 @pytest.fixture
