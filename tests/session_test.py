@@ -4,10 +4,13 @@ from fastmcp.server.middleware import MiddlewareContext
 import pytest
 from unittest.mock import patch, AsyncMock, Mock
 
+
 @pytest.fixture(autouse=True)
 def no_browser_open(monkeypatch):
     import webbrowser
+
     monkeypatch.setattr(webbrowser, "open_new", lambda *a, **k: True)
+
 
 @pytest.fixture
 def mock_wss():
@@ -45,9 +48,7 @@ class TestColabProxyMiddleware:
         await middleware.on_message(context, call_next)
 
         call_next.assert_called_once_with(context)
-        context.fastmcp_context.set_state.assert_called_once_with(
-            "fe_connected", True
-        )
+        context.fastmcp_context.set_state.assert_called_once_with("fe_connected", True)
         assert middleware.last_message_connected is True
         context.fastmcp_context.send_prompt_list_changed.assert_called_once()
         context.fastmcp_context.send_resource_list_changed.assert_called_once()
@@ -69,9 +70,7 @@ class TestColabProxyMiddleware:
         await middleware.on_message(context, call_next)
 
         call_next.assert_called_once_with(context)
-        context.fastmcp_context.set_state.assert_called_once_with(
-            "fe_connected", False
-        )
+        context.fastmcp_context.set_state.assert_called_once_with("fe_connected", False)
         assert middleware.last_message_connected is False
         context.fastmcp_context.send_prompt_list_changed.assert_called_once()
         context.fastmcp_context.send_resource_list_changed.assert_called_once()
@@ -92,13 +91,12 @@ class TestColabProxyMiddleware:
         await middleware.on_message(context, call_next)
 
         call_next.assert_called_once_with(context)
-        context.fastmcp_context.set_state.assert_called_once_with(
-            "fe_connected", True
-        )
+        context.fastmcp_context.set_state.assert_called_once_with("fe_connected", True)
         assert middleware.last_message_connected is True
         context.fastmcp_context.send_prompt_list_changed.assert_not_called()
         context.fastmcp_context.send_resource_list_changed.assert_not_called()
         context.fastmcp_context.send_tool_list_changed.assert_not_called()
+
 
 class TestColabProxyClient:
     def test_client_factory_connection_live(self, mock_wss):
@@ -115,7 +113,9 @@ class TestColabProxyClient:
     @pytest.mark.asyncio
     @patch("colab_mcp.session.Client")
     @patch("colab_mcp.session.ColabTransport", spec=session.ColabTransport)
-    async def test_start_proxy_client(self, mock_colab_transport, mock_client, mock_wss):
+    async def test_start_proxy_client(
+        self, mock_colab_transport, mock_client, mock_wss
+    ):
         mock_client.return_value.__aenter__ = AsyncMock()
         client = session.ColabProxyClient(mock_wss)
         mock_wss.connection_live.set()

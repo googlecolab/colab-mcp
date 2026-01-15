@@ -15,6 +15,9 @@ dependencies = [
     "pydantic>=2.12.3,<3.0.0",
     "requests>=2.32.5",
     "websockets>=15.0.1",
+    "requests-oauth2client>=0.4.0",
+    "google-auth-oauthlib>=0.7.0",
+    "jupyter-kernel-client",
 ]
 
 [project.scripts]
@@ -26,11 +29,20 @@ build-backend = "hatchling.build"
 
 [dependency-groups]
 dev = [
+    "coverage>=7.13.1",
     "fastmcp>=2.2.0",
+    "jupyter-kernel-client",
     "pytest>=8.4.2",
     "pytest-asyncio>=1.2.0",
+    "pytest-cov>=7.0.0",
     "ruff>=0.14.3",
 ]
 commit = [
     "pre-commit>=4.3.0",
 ]
+
+[tool.uv.sources]
+jupyter-kernel-client = { path = "../jupyter-kernel-client", editable = true }
+
+[[tool.uv.index]]
+url = "https://pypi.org/simple"

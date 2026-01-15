@@ -1,4 +1,5 @@
-import base64
+import abc
+from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Dict, List, Optional, Union
 from urllib.parse import urljoin, urlparse
@@ -19,22 +20,43 @@ COLAB_CLIENT_AGENT_HEADER = {
 COLAB_XSRF_TOKEN_HEADER = {"key": "X-Goog-Colab-Token", "value": ""}
 
 
-def uuid_to_web_safe_base64(notebook_hash: uuid.UUID) -> str:
-    return base64.urlsafe_b64encode(notebook_hash.bytes).rstrip(b"=").decode("utf-8")
+@dataclass
+class ColabEnvironment(abc.ABC):
+    domain: str
+    api: str
+
+
+@dataclass
+class Prod(ColabEnvironment):
+    domain: str = "https://colab.research.google.com"
+    api: str = "https://colab.pa.googleapis.com"
+
+
+@dataclass
+class Sandbox(ColabEnvironment):
+    domain: str = "https://colab.sandbox.google.com"
+    api: str = "https://staging-colab.sandbox.googleapis.com"
+
+
+def uuid_to_web_safe_base64(uuid: uuid.UUID) -> str:
+    uuid_str = str(uuid)
+    # Replace hyphens with underscores
+    transformed = uuid_str.replace("-", "_")
+
+    # Ensure 44-character length by adding the necessary padding
+    padding = "." * (44 - len(uuid_str))
+
+    return transformed + padding
 
 
 class Accelerator(str, Enum):
-    NONE = "ACCELERATOR_NONE"
+    NONE = "NONE"
     T4 = "T4"
     L4 = "L4"
     A100 = "A100"
     V28 = "V2-8"
     V5E1 = "V5E-1"
     V6E1 = "V6E-1"
-
-
-class GetAssignmentResponse(BaseModel):
-    xsrf_token: str = Field(..., alias="xsrfToken")
 
 
 class Outcome(str, Enum):
@@ -52,26 +74,34 @@ class RuntimeProxyInfo(BaseModel):
 
 
 class Variant(str, Enum):
-    DEFAULT = "VARIANT_DEFAULT"
-    GPU = "VARIANT_GPU"
-    TPU = "VARIANT_TPU"
+    DEFAULT = "DEFAULT"
+    GPU = "GPU"
+    TPU = "TPU"
 
 
-class Shape(str, Enum):
-    STANDARD = "SHAPE_STANDARD"
-    HIGH_RAM = "SHAPE_HIGH_RAM"
+class AssignmentVariant(int, Enum):
+    DEFAULT = 0
+    GPU = 1
+    TPU = 2
 
 
-class SubscriptionTier(str, Enum):
-    NONE = "SUBSCRIPTION_TIER_NONE"
-    PAY_AS_YOU_GO = "SUBSCRIPTION_TIER_PAY_AS_YOU_GO"
-    COLAB_PRO = "SUBSCRIPTION_TIER_PRO"
-    COLAB_PRO_PLUS = "SUBSCRIPTION_TIER_PRO_PLUS"
+class Shape(int, Enum):
+    STANDARD = 0
+    HIGH_RAM = 1
 
 
-class SubscriptionState(str, Enum):
-    SUBSCRIBED = "SUBSCRIBED"
-    UNSUBSCRIBED = "UNSUBSCRIBED"
+class SubscriptionTier(int, Enum):
+    NONE = 0
+    PRO = 1
+    PRO_PLUS = 2
+
+
+class SubscriptionState(int, Enum):
+    UNSUBSCRIBED = 1
+    RECURRING = 2
+    NON_RECURRING = 3
+    PENDING_ACTIVATION = 4
+    DECLINED = 5
 
 
 class CcuInfo(BaseModel):
@@ -84,19 +114,27 @@ class UserInfo(BaseModel):
     subscription_tier: SubscriptionTier = Field(..., alias="subscriptionTier")
 
 
-class Assignment(BaseModel):
+class PostAssignmentResponse(BaseModel):
     accelerator: Accelerator
     endpoint: str
-    idle_timeout_sec: int = Field(..., alias="idleTimeoutSec")
+    idle_timeout_sec: int = Field(..., alias="fit")
     machine_shape: Shape = Field(..., alias="machineShape")
     runtime_proxy_info: RuntimeProxyInfo = Field(..., alias="runtimeProxyInfo")
-    subscription_state: SubscriptionState = Field(..., alias="subscriptionState")
-    subscription_tier: SubscriptionTier = Field(..., alias="subscriptionTier")
-    variant: Variant
+    subscription_state: SubscriptionState = Field(..., alias="sub")
+    subscription_tier: SubscriptionTier = Field(..., alias="subTier")
+    variant: AssignmentVariant
 
 
-class PostAssignmentResponse(Assignment):
-    outcome: Optional[Outcome] = None
+class Assignment(BaseModel):
+    endpoint: str
+    runtime_proxy_token: str
+
+
+class GetAssignmentResponse(BaseModel):
+    acc: str = Field(..., alias="acc")
+    nbh: str = Field(..., alias="nbh")
+    token: str = Field(..., alias="token")
+    variant: Variant = Field(..., alias="variant")
 
 
 XSSI_PREFIX = ")]}'\n"
@@ -110,7 +148,7 @@ class InvalidSchemaError(Exception):
 class ListedAssignment(BaseModel):
     accelerator: Accelerator
     endpoint: str
-    variant: Variant
+    variant: AssignmentVariant
     machine_shape: Shape = Field(..., alias="machineShape")
 
 
@@ -139,13 +177,10 @@ class InsufficientQuotaError(Exception):
 
 
 class ColabClient:
-    def __init__(
-        self, colab_domain: str, colab_api_domain: str, get_access_token, logger=None
-    ):
-        self.colab_domain = colab_domain
-        self.colab_api_domain = colab_api_domain
-        self.get_access_token = get_access_token
-        self.session = requests.Session()
+    def __init__(self, env: ColabEnvironment, session, logger=None):
+        self.colab_domain = env.domain
+        self.colab_api_domain = env.api
+        self.session = session  # requests.Session()
         if "localhost" in self.colab_domain:
             self.session.verify = False
         self.logger = logger or logging.getLogger(__name__)
@@ -176,26 +211,23 @@ class ColabClient:
                 params = {}
             params["authuser"] = "0"
 
-        token = self.get_access_token()
+        # token = self.get_access_token()
         request_headers = headers.copy() if headers else {}
         request_headers[ACCEPT_JSON_HEADER["key"]] = ACCEPT_JSON_HEADER["value"]
-        request_headers[AUTHORIZATION_HEADER["key"]] = f"Bearer {token}"
+        # request_headers[AUTHORIZATION_HEADER["key"]] = f"Bearer {token}"
         request_headers[COLAB_CLIENT_AGENT_HEADER["key"]] = COLAB_CLIENT_AGENT_HEADER[
             "value"
         ]
 
-        if self.logger.isEnabledFor(logging.DEBUG):
-            self.logger.debug(f"Request: {method} {endpoint}")
-            self.logger.debug(f"Headers: {request_headers}")
-            self.logger.debug(f"Params: {params}")
+        self.logger.debug(f"Request: {method} {endpoint}")
+        self.logger.debug(f"Headers: {request_headers}")
+        self.logger.debug(f"Params: {params}")
 
         response = self.session.request(
             method, endpoint, headers=request_headers, params=params, **kwargs
         )
-
-        if self.logger.isEnabledFor(logging.DEBUG):
-            self.logger.debug(f"Response: {response.status_code} {response.reason}")
-            self.logger.debug(f"Response Body: {response.text}")
+        self.logger.debug(f"Response: {response.status_code} {response.reason}")
+        self.logger.debug(f"Response Body: {response.text}")
 
         if not response.ok:
             raise ColabRequestError(
@@ -227,7 +259,7 @@ class ColabClient:
     def assign(
         self,
         notebook_hash: uuid.UUID,
-        variant: Variant,
+        variant: Optional[Variant] = None,
         accelerator: Optional[Accelerator] = None,
     ) -> Dict[str, Any]:
         assignment = self._get_assignment(notebook_hash, variant, accelerator)
@@ -236,36 +268,24 @@ class ColabClient:
 
         try:
             res = self._post_assignment(
-                notebook_hash, assignment.xsrf_token, variant, accelerator
+                notebook_hash, assignment.token, variant, accelerator
             )
         except ColabRequestError as e:
             if e.response.status_code == 412:
                 raise TooManyAssignmentsError(str(e))
             raise e
 
-        if res.outcome in [
-            Outcome.QUOTA_DENIED_REQUESTED_VARIANTS,
-            Outcome.QUOTA_EXCEEDED_USAGE_TIME,
-        ]:
-            raise InsufficientQuotaError(
-                "You have insufficient quota to assign this server."
-            )
-        if res.outcome == Outcome.DENYLISTED:
-            raise DenylistedError(
-                "This account has been blocked from accessing Colab servers."
-            )
-
-        return {"assignment": res, "is_new": True}
+        return res
 
     def _build_assign_url(
         self,
         notebook_hash: uuid.UUID,
-        variant: Variant,
+        variant: Optional[Variant] = None,
         accelerator: Optional[Accelerator] = None,
     ) -> str:
         url = urljoin(self.colab_domain, f"{TUN_ENDPOINT}/assign")
         params = {"nbh": uuid_to_web_safe_base64(notebook_hash)}
-        if variant != Variant.DEFAULT:
+        if variant:
             params["variant"] = variant.value
         if accelerator:
             params["accelerator"] = accelerator.value
@@ -277,22 +297,17 @@ class ColabClient:
     def _get_assignment(
         self,
         notebook_hash: uuid.UUID,
-        variant: Variant,
+        variant: Optional[Variant] = None,
         accelerator: Optional[Accelerator] = None,
     ) -> Union[GetAssignmentResponse, Assignment]:
         url = self._build_assign_url(notebook_hash, variant, accelerator)
-
-        # A bit of a hack to handle union types with pydantic
-        try:
-            return self._issue_request(url, schema=Assignment)
-        except Exception:
-            return self._issue_request(url, schema=GetAssignmentResponse)
+        return self._issue_request(url, schema=GetAssignmentResponse)
 
     def _post_assignment(
         self,
         notebook_hash: uuid.UUID,
         xsrf_token: str,
-        variant: Variant,
+        variant: Optional[Variant] = None,
         accelerator: Optional[Accelerator] = None,
     ) -> PostAssignmentResponse:
         url = self._build_assign_url(notebook_hash, variant, accelerator)
