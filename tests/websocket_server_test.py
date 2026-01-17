@@ -3,12 +3,16 @@ import asyncio
 from colab_mcp.websocket_server import ColabWebSocketServer
 from mcp.types import JSONRPCRequest, JSONRPCResponse, JSONRPCMessage
 from mcp.shared.message import SessionMessage
-import websockets
-
 import pytest
+from unittest.mock import patch
+import websockets
 
 TEST_PORT = 9876
 
+@pytest.fixture(autouse=True)
+def no_browser_open(monkeypatch):
+    import webbrowser
+    monkeypatch.setattr(webbrowser, "open_new", lambda *a, **k: True)
 
 @pytest.mark.asyncio
 async def test_successful_connection():
@@ -143,7 +147,6 @@ async def test_malformed_incoming_message():
 
     await client.close()
 
-
 @pytest.mark.asyncio
 async def test_bad_token():
   with pytest.raises(websockets.exceptions.InvalidStatus, check= lambda e: e.response.status_code==403):
@@ -176,3 +179,9 @@ async def test_malformed_auth_header():
             subprotocols=["mcp"],
             additional_headers={"Authorization": f"Bearer?{server.token}"}
         )
+
+@pytest.mark.asyncio
+@patch("colab_mcp.websocket_server.webbrowser.open_new")
+async def test_browser_opens_on_startup(mock_open):
+  async with ColabWebSocketServer(port=TEST_PORT) as server:
+    mock_open.assert_called_once_with(f"https://colab.google.com/#?mcp_proxy_token={server.token}")

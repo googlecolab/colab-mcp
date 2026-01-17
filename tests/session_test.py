@@ -1,10 +1,13 @@
 import asyncio
 from colab_mcp import session
-from colab_mcp.websocket_server import ColabWebSocketServer
 from fastmcp.server.middleware import MiddlewareContext
-
-from unittest import mock
 import pytest
+from unittest.mock import patch, AsyncMock, Mock
+
+@pytest.fixture(autouse=True)
+def no_browser_open(monkeypatch):
+    import webbrowser
+    monkeypatch.setattr(webbrowser, "open_new", lambda *a, **k: True)
 
 @pytest.fixture
 def mock_wss():
@@ -15,8 +18,8 @@ def mock_wss():
 class MockColabWebSocketServer:
     def __init__(self):
         self.connection_live = asyncio.Event()
-        self.read_stream = mock.AsyncMock()
-        self.write_stream = mock.AsyncMock()
+        self.read_stream = AsyncMock()
+        self.write_stream = AsyncMock()
 
     async def __aenter__(self):
         return self
@@ -32,12 +35,12 @@ class TestColabProxyMiddleware:
         mock_wss.connection_live.clear()
         middleware = session.ColabProxyMiddleware(mock_wss)
         mock_wss.connection_live.set()
-        context = mock.Mock(spec=MiddlewareContext)
-        context.fastmcp_context.set_state = mock.Mock()
-        context.fastmcp_context.send_prompt_list_changed = mock.AsyncMock()
-        context.fastmcp_context.send_resource_list_changed = mock.AsyncMock()
-        context.fastmcp_context.send_tool_list_changed = mock.AsyncMock()
-        call_next = mock.AsyncMock()
+        context = Mock(spec=MiddlewareContext)
+        context.fastmcp_context.set_state = Mock()
+        context.fastmcp_context.send_prompt_list_changed = AsyncMock()
+        context.fastmcp_context.send_resource_list_changed = AsyncMock()
+        context.fastmcp_context.send_tool_list_changed = AsyncMock()
+        call_next = AsyncMock()
 
         await middleware.on_message(context, call_next)
 
@@ -56,12 +59,12 @@ class TestColabProxyMiddleware:
         mock_wss.connection_live.set()
         middleware = session.ColabProxyMiddleware(mock_wss)
         mock_wss.connection_live.clear()
-        context = mock.Mock(spec=MiddlewareContext)
-        context.fastmcp_context.set_state = mock.Mock()
-        context.fastmcp_context.send_prompt_list_changed = mock.AsyncMock()
-        context.fastmcp_context.send_resource_list_changed = mock.AsyncMock()
-        context.fastmcp_context.send_tool_list_changed = mock.AsyncMock()
-        call_next = mock.AsyncMock()
+        context = Mock(spec=MiddlewareContext)
+        context.fastmcp_context.set_state = Mock()
+        context.fastmcp_context.send_prompt_list_changed = AsyncMock()
+        context.fastmcp_context.send_resource_list_changed = AsyncMock()
+        context.fastmcp_context.send_tool_list_changed = AsyncMock()
+        call_next = AsyncMock()
 
         await middleware.on_message(context, call_next)
 
@@ -79,12 +82,12 @@ class TestColabProxyMiddleware:
         """Tests no connection state change."""
         mock_wss.connection_live.set()
         middleware = session.ColabProxyMiddleware(mock_wss)
-        context = mock.Mock(spec=MiddlewareContext)
-        context.fastmcp_context.set_state = mock.Mock()
-        context.fastmcp_context.send_prompt_list_changed = mock.AsyncMock()
-        context.fastmcp_context.send_resource_list_changed = mock.AsyncMock()
-        context.fastmcp_context.send_tool_list_changed = mock.AsyncMock()
-        call_next = mock.AsyncMock()
+        context = Mock(spec=MiddlewareContext)
+        context.fastmcp_context.set_state = Mock()
+        context.fastmcp_context.send_prompt_list_changed = AsyncMock()
+        context.fastmcp_context.send_resource_list_changed = AsyncMock()
+        context.fastmcp_context.send_tool_list_changed = AsyncMock()
+        call_next = AsyncMock()
 
         await middleware.on_message(context, call_next)
 
@@ -97,12 +100,11 @@ class TestColabProxyMiddleware:
         context.fastmcp_context.send_resource_list_changed.assert_not_called()
         context.fastmcp_context.send_tool_list_changed.assert_not_called()
 
-
 class TestColabProxyClient:
     def test_client_factory_connection_live(self, mock_wss):
         mock_wss.connection_live.set()
         client = session.ColabProxyClient(mock_wss)
-        client.proxy_mcp_client = mock.Mock()
+        client.proxy_mcp_client = Mock()
 
         assert client.client_factory() is client.proxy_mcp_client
 
@@ -111,10 +113,10 @@ class TestColabProxyClient:
         assert client.client_factory() is client.stubbed_mcp_client
 
     @pytest.mark.asyncio
-    @mock.patch("colab_mcp.session.Client")
-    @mock.patch("colab_mcp.session.ColabTransport", spec=session.ColabTransport)
+    @patch("colab_mcp.session.Client")
+    @patch("colab_mcp.session.ColabTransport", spec=session.ColabTransport)
     async def test_start_proxy_client(self, mock_colab_transport, mock_client, mock_wss):
-        mock_client.return_value.__aenter__ = mock.AsyncMock()
+        mock_client.return_value.__aenter__ = AsyncMock()
         client = session.ColabProxyClient(mock_wss)
         mock_wss.connection_live.set()
         async with client:
@@ -126,10 +128,10 @@ class TestColabProxyClient:
 
 class TestColabSessionProxy:
     @pytest.mark.asyncio
-    @mock.patch("colab_mcp.session.ToolInjectionMiddleware")
-    @mock.patch("colab_mcp.session.ColabWebSocketServer")
-    @mock.patch("colab_mcp.session.ColabProxyClient")
-    @mock.patch("colab_mcp.session.ColabProxyMiddleware")
+    @patch("colab_mcp.session.ToolInjectionMiddleware")
+    @patch("colab_mcp.session.ColabWebSocketServer")
+    @patch("colab_mcp.session.ColabProxyClient")
+    @patch("colab_mcp.session.ColabProxyMiddleware")
     async def test_start_proxy_server(
         self,
         mock_colab_proxy_middleware,
@@ -137,8 +139,8 @@ class TestColabSessionProxy:
         mock_colab_web_socket_server,
         mock_tool_injection_middleware,
     ):
-        mock_colab_web_socket_server.return_value.__aenter__ = mock.AsyncMock()
-        mock_colab_proxy_client.return_value.__aenter__ = mock.AsyncMock()
+        mock_colab_web_socket_server.return_value.__aenter__ = AsyncMock()
+        mock_colab_proxy_client.return_value.__aenter__ = AsyncMock()
         proxy = session.ColabSessionProxy()
         await proxy.start_proxy_server()
         mock_colab_proxy_client.assert_called_once()

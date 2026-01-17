@@ -7,6 +7,7 @@ from mcp.shared.message import SessionMessage
 from pydantic_core import ValidationError
 import secrets
 import socket
+import webbrowser
 import websockets
 from websockets.asyncio.server import ServerConnection
 from websockets.datastructures import Headers
@@ -15,6 +16,8 @@ from websockets.http11 import Request, Response
 from websockets.typing import Subprotocol
 
 WEB_SOCKET_PORT = 9998
+
+COLAB = "https://colab.google.com"
 
 class ColabWebSocketServer:
     """
@@ -27,7 +30,7 @@ class ColabWebSocketServer:
         self.port = port
         self.connection_lock = asyncio.Lock()
         self.connection_live = asyncio.Event()
-        self.allowed_origins = ["https://colab.google.com"]
+        self.allowed_origins = [COLAB]
         self._server: websockets.Server | None = None
 
         self.read_stream: MemoryObjectReceiveStream[SessionMessage | Exception]
@@ -118,6 +121,7 @@ class ColabWebSocketServer:
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         sock.bind((self.host, self.port))
         self._server = await websockets.serve(self._connection_handler, sock=sock, subprotocols=[Subprotocol("mcp")], origins=self.allowed_origins, process_request=self._validate_authorization)
+        webbrowser.open_new(f"{COLAB}/#?mcp_proxy_token={self.token}")
         return self
 
     async def __aexit__ (self, exc_type, exc_val, exc_tb):
