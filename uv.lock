@@ -233,7 +233,7 @@ requires-dist = [
     { name = "anyio", specifier = ">=4.5" },
     { name = "fastmcp", specifier = ">=2.2.0" },
     { name = "google-auth-oauthlib", specifier = ">=0.7.0" },
-    { name = "jupyter-kernel-client", editable = "../jupyter-kernel-client" },
+    { name = "jupyter-kernel-client", git = "https://github.com/googlecolab/jupyter-kernel-client" },
     { name = "mcp", extras = ["cli"], specifier = ">=1.20.0" },
     { name = "pydantic", specifier = ">=2.12.3,<3.0.0" },
     { name = "requests", specifier = ">=2.32.5" },
@@ -246,7 +246,7 @@ commit = [{ name = "pre-commit", specifier = ">=4.3.0" }]
 dev = [
     { name = "coverage", specifier = ">=7.13.1" },
     { name = "fastmcp", specifier = ">=2.2.0" },
-    { name = "jupyter-kernel-client", editable = "../jupyter-kernel-client" },
+    { name = "jupyter-kernel-client", git = "https://github.com/googlecolab/jupyter-kernel-client" },
     { name = "pytest", specifier = ">=8.4.2" },
     { name = "pytest-asyncio", specifier = ">=1.2.0" },
     { name = "pytest-cov", specifier = ">=7.0.0" },
@@ -755,7 +755,7 @@ wheels = [
 [[package]]
 name = "jupyter-kernel-client"
 version = "0.8.0"
-source = { editable = "../jupyter-kernel-client" }
+source = { git = "https://github.com/googlecolab/jupyter-kernel-client#beb635545f2486676de184a52e6dd456d386f058" }
 dependencies = [
     { name = "jupyter-client" },
     { name = "jupyter-core" },
@@ -764,53 +764,6 @@ dependencies = [
     { name = "traitlets" },
     { name = "typing-extensions" },
     { name = "websocket-client" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "ipykernel", marker = "extra == 'test'" },
-    { name = "jupyter-client", specifier = ">=8.6.3" },
-    { name = "jupyter-console", marker = "extra == 'konsole'" },
-    { name = "jupyter-core" },
-    { name = "jupyter-mimetypes" },
-    { name = "jupyter-server", marker = "extra == 'test'", specifier = ">=2.10,<3" },
-    { name = "mdformat", marker = "extra == 'lint'", specifier = ">0.7" },
-    { name = "mdformat-gfm", marker = "extra == 'lint'", specifier = ">=0.3.5" },
-    { name = "mypy", marker = "extra == 'typing'", specifier = ">=0.990" },
-    { name = "numpy", marker = "extra == 'test'" },
-    { name = "pandas", marker = "extra == 'test'" },
-    { name = "pre-commit", marker = "extra == 'lint'" },
-    { name = "pytest", marker = "extra == 'test'", specifier = ">=7.0" },
-    { name = "pytest-asyncio", marker = "extra == 'test'" },
-    { name = "pytest-cov", marker = "extra == 'test'" },
-    { name = "pytest-timeout", marker = "extra == 'test'" },
-    { name = "requests" },
-    { name = "ruff", marker = "extra == 'lint'" },
-    { name = "traitlets", specifier = ">=5.3" },
-    { name = "typing-extensions" },
-    { name = "websocket-client" },
-]
-
-[package.metadata.requires-dev]
-dev = [
-    { name = "ipykernel", specifier = ">=6.31.0" },
-    { name = "jupyter-server", specifier = ">=2.17.0" },
-    { name = "numpy", specifier = ">=2.0.2" },
-    { name = "pandas", specifier = ">=2.3.3" },
-    { name = "pytest", specifier = ">=8.4.2" },
-    { name = "pytest-asyncio", specifier = ">=1.2.0" },
-    { name = "pytest-cov", specifier = ">=7.0.0" },
-    { name = "pytest-timeout", specifier = ">=2.4.0" },
-]
-test = [
-    { name = "ipykernel", specifier = ">=6.31.0" },
-    { name = "jupyter-server", specifier = ">=2.17.0" },
-    { name = "numpy", specifier = ">=2.0.2" },
-    { name = "pandas", specifier = ">=2.3.3" },
-    { name = "pytest", specifier = ">=8.4.2" },
-    { name = "pytest-asyncio", specifier = ">=1.2.0" },
-    { name = "pytest-cov", specifier = ">=7.0.0" },
-    { name = "pytest-timeout", specifier = ">=2.4.0" },
 ]
 
 [[package]]

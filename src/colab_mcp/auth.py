@@ -8,16 +8,9 @@ from typing import Optional, Dict
 
 logger = logging.getLogger(__name__)
 
-# It's recommended to load these from environment variables or a secrets manager.
-CLIENT_ID = os.environ.get(
-    "GOOGLE_CLIENT_ID",
-    "366568267421-7o7krvn9105p1ba0p3ahnnf8upt09m7h.apps.googleusercontent.com",
-)
-CLIENT_SECRET = os.environ.get(
-    "GOOGLE_CLIENT_SECRET", "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"
-)
+CLIENT_ID = "366568267421-7o7krvn9105p1ba0p3ahnnf8upt09m7h.apps.googleusercontent.com"
+CLIENT_SECRET = "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"
 
-# The client secrets can be structured as a dictionary for InstalledAppFlow
 CLIENT_SECRETS_DICT = {
     "installed": {
         "client_id": CLIENT_ID,
