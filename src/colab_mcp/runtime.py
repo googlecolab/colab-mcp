@@ -2,8 +2,6 @@ import logging
 
 from fastmcp import FastMCP
 
-# from colab_mcp import auth
-
 # Create an MCP server
 mcp = FastMCP("runtime")
 

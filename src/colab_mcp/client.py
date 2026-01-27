@@ -211,10 +211,8 @@ class ColabClient:
                 params = {}
             params["authuser"] = "0"
 
-        # token = self.get_access_token()
         request_headers = headers.copy() if headers else {}
         request_headers[ACCEPT_JSON_HEADER["key"]] = ACCEPT_JSON_HEADER["value"]
-        # request_headers[AUTHORIZATION_HEADER["key"]] = f"Bearer {token}"
         request_headers[COLAB_CLIENT_AGENT_HEADER["key"]] = COLAB_CLIENT_AGENT_HEADER[
             "value"
         ]

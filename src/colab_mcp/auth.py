@@ -55,9 +55,10 @@ def _write_netrc_authenticators(authenticators: Dict[str, tuple], netrc_path: st
         original_umask = os.umask(0o177)
         with open(netrc_path, "w") as f:
             f.write(netrc_content)
-        os.umask(original_umask)  # Restore original umask
     except Exception as e:
         logger.error(f"Failed to write .netrc: {e}")
+    finally:
+        os.umask(original_umask)  # Restore original umask
 
 
 def _read_refresh_token_from_netrc() -> Optional[str]:
