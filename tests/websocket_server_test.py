@@ -198,9 +198,29 @@ async def test_malformed_auth_header():
 
 
 @pytest.mark.asyncio
+async def test_token_in_url():
+    async with ColabWebSocketServer(port=TEST_PORT) as server:
+        client = await websockets.connect(
+            f"ws://localhost:{TEST_PORT}?access_token={server.token}",
+            origin="https://colab.google.com",
+            subprotocols=["mcp"],
+        )
+        assert server.connection_live.is_set()
+        assert server.connection_lock.locked()
+
+        await client.close()
+        await client.wait_closed()
+        await asyncio.sleep(1)  # Allow server to update state
+
+        assert not server.connection_live.is_set()
+        assert not server.connection_lock.locked()
+
+
+
+@pytest.mark.asyncio
 @patch("colab_mcp.websocket_server.webbrowser.open_new")
 async def test_browser_opens_on_startup(mock_open):
     async with ColabWebSocketServer(port=TEST_PORT) as server:
         mock_open.assert_called_once_with(
-            f"https://colab.google.com/#?mcp_proxy_token={server.token}"
+            f"https://colab.google.com/#mcpProxyToken={server.token}"
         )
