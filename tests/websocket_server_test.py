@@ -216,7 +216,6 @@ async def test_token_in_url():
         assert not server.connection_lock.locked()
 
 
-
 @pytest.mark.asyncio
 @patch("colab_mcp.websocket_server.webbrowser.open_new")
 async def test_browser_opens_on_startup(mock_open):

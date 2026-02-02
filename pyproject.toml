@@ -43,8 +43,8 @@ commit = [
 
 [tool.uv.sources]
 # For local development with the jupyter-kernel-client, uncomment this
-# jupyter-kernel-client = { path = "../jupyter-kernel-client", editable = true }
-jupyter-kernel-client = { git = "https://github.com/googlecolab/jupyter-kernel-client" }
+jupyter-kernel-client = { path = "../jupyter-kernel-client", editable = true }
+# jupyter-kernel-client = { git = "https://github.com/googlecolab/jupyter-kernel-client" }
 
 [[tool.uv.index]]
 url = "https://pypi.org/simple"

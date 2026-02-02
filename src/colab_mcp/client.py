@@ -150,6 +150,7 @@ class ListedAssignment(BaseModel):
     endpoint: str
     variant: AssignmentVariant
     machine_shape: Shape = Field(..., alias="machineShape")
+    runtime_proxy_info: RuntimeProxyInfo = Field(..., alias="runtimeProxyInfo")
 
 
 class ListedAssignments(BaseModel):

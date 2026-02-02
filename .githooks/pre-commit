@@ -6,5 +6,5 @@ ARGS=(hook-impl --config=.pre-commit-config.yaml --hook-type=pre-commit)
 HERE="$(cd "$(dirname "$0")" && pwd)"
 ARGS+=(--hook-dir "$HERE" -- "$@")
 
-exec uv run --index https://pypi.org/simple --with pre-commit,pre-commit-uv pre-commit "${ARGS[@]}"
+exec uv run --active --index https://pypi.org/simple --with pre-commit,pre-commit-uv pre-commit "${ARGS[@]}"
 

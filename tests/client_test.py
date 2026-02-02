@@ -48,6 +48,7 @@ DEFAULT_LIST_ASSIGNMENTS_RESPONSE = ListedAssignments(
             endpoint=DEFAULT_ASSIGNMENT_RESPONSE["endpoint"],
             variant=DEFAULT_ASSIGNMENT_RESPONSE["variant"],
             machineShape=DEFAULT_ASSIGNMENT_RESPONSE["machineShape"],
+            runtimeProxyInfo=DEFAULT_ASSIGNMENT_RESPONSE["runtimeProxyInfo"],
         )
     ]
 )

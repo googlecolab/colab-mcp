@@ -7,7 +7,7 @@ from unittest.mock import patch
 from colab_mcp import auth
 
 
-class TestAuthNetrcFunctions(unittest.TestCase):
+class NetrcTestCase(unittest.TestCase):
     def setUp(self):
         # Create a temporary directory
         self.test_dir = tempfile.mkdtemp()
@@ -25,6 +25,8 @@ class TestAuthNetrcFunctions(unittest.TestCase):
         # Remove the temporary directory
         shutil.rmtree(self.test_dir)
 
+
+class TestAuthNetrcFunctions(NetrcTestCase):
     def test_save_and_read_refresh_token(self):
         """Test saving a token and then reading it back."""
         test_token = "fake-refresh-token-12345"
@@ -92,7 +94,7 @@ class TestAuthNetrcFunctions(unittest.TestCase):
             self.assertIn(other_password, content)
 
 
-class TestGoogleOAuthClient(unittest.TestCase):
+class TestGoogleOAuthClient(NetrcTestCase):
     @patch("colab_mcp.auth._save_refresh_token_to_netrc")
     @patch("colab_mcp.auth.InstalledAppFlow")
     @patch("colab_mcp.auth._read_refresh_token_from_netrc", return_value=None)
