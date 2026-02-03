@@ -19,6 +19,14 @@ An MCP server for interacting with Colab.
 ...
 ```
 
+## Issues & Discussions
+
+We are using GitHub [discussions](https://github.com/googlecolab/colab-mcp/discussions) as the
+place for issue discussion and feature requests. As discussions mature into action items, we
+will add those items as issues. This helps us ensure that issues in the issue tracker are
+well-understood, deduplicated, and actionable. For these reasons, **please do <u>NOT</u> open
+issues directly.** 
+
 ## Internal - For Colab Developers
 
 ### Prerequisites
