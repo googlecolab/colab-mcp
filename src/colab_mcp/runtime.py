@@ -52,8 +52,12 @@ class _ColabRuntimeTool(object):
         """Provisions a new Colab VM assignment for a specific notebook.
 
         Use this if `list_all_kernel_sessions()` returns an empty list or if you
-        need a fresh environment. The `notebook_id` can be extracted from the
-        Colab notebook URL.
+        need a fresh environment. The notebook_id here represents a unique ID for a Colab VM,
+        if you intend on re-using a VM, then use the same notebook ID.
+
+        For MCP server usage, the notebook_id should be mapped to the lifetime of the process
+        (meaning that while this server process is running, it should re-use the same notebook_id
+        unless the user explicitly requests a fresh server).
         """
         return self.colab_prod_client.assign(notebook_id)
 

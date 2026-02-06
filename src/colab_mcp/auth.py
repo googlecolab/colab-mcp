@@ -161,9 +161,9 @@ class _GoogleOAuthClient:
             _save_refresh_token_to_netrc(flow.credentials.refresh_token)
             logger.info("New refresh token saved to .netrc.")
         else:
-            raise PermissionError(
-                "No refresh token obtained during full OAuth flow. Credentials will not be persisted."
-            )
+            err = "No refresh token obtained during full OAuth flow. Credentials will not be persisted."
+            logging.warning(err)
+            raise PermissionError(err)
 
         return flow.authorized_session()
 
