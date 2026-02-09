@@ -157,6 +157,10 @@ class ListedAssignments(BaseModel):
     assignments: List[ListedAssignment]
 
 
+class GetUnassignRequest(BaseModel):
+    token: str
+
+
 class ColabRequestError(Exception):
     def __init__(self, message, request, response, response_body=None):
         super().__init__(message)
@@ -254,6 +258,14 @@ class ColabClient:
         url = urljoin(self.colab_domain, f"{TUN_ENDPOINT}/assignments")
         assignments = self._issue_request(url, schema=ListedAssignments)
         return assignments.assignments
+
+    def unassign(self, endpoint: str):
+        url = urljoin(self.colab_domain, f"{TUN_ENDPOINT}/unassign/{endpoint}")
+        resp = self._issue_request(url, schema=GetUnassignRequest)
+        headers = {COLAB_XSRF_TOKEN_HEADER["key"]: resp.token}
+        return self._issue_request(
+            url, method="POST", headers=headers, schema=BaseModel
+        )
 
     def assign(
         self,

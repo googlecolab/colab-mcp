@@ -5,12 +5,12 @@ import logging
 import sys
 
 from fastmcp import FastMCP
+from fastmcp.utilities import logging as fastmcp_logger
 
 from colab_mcp import runtime
 from colab_mcp import auth
 from colab_mcp.session import ColabSessionProxy
 
-import jupyter_kernel_client
 
 mcp = FastMCP(name="ColabMCP")
 
@@ -25,6 +25,7 @@ def init_logger():
         filename=log_filename,
         level=logging.INFO,  # Set the minimum logging level to capture
     )
+    fastmcp_logger.get_logger("colab-mcp").info("logging to %s" % log_filename)
 
 
 def parse_args(v):
@@ -38,6 +39,13 @@ def parse_args(v):
         action="store_true",
         default=False,
     )
+    parser.add_argument(
+        "-p",
+        "--enable-proxy",
+        help="if set, enable the runtime proxy (enabled by default).",
+        action="store_true",
+        default=True,
+    )
     return parser.parse_args(v)
 
 
@@ -45,27 +53,32 @@ async def main_async():
     args = parse_args(sys.argv[1:])
     init_logger()
 
-    # initialize credentials when we start so they're available
-    # after.
+    # preemptively initialize credentials when we start so they're available
     try:
         auth.GoogleOAuthClient.get_session()
     except PermissionError as e:
         sys.exit(f"failed to initialize authentication credentials, exiting - {e}")
 
-    logging.info(
-        "using mcp server: %s, kernel client: %s" % (runtime.mcp, jupyter_kernel_client)
-    )
-
+    crt = None
     if args.enable_runtime:
-        mcp.mount(runtime.mcp, prefix="runtime")
+        crt = runtime.ColabRuntimeTool()
+        logging.info("enabling runtime tools")
+        mcp.mount(crt.mcp, prefix="runtime")
 
-    session_mcp = ColabSessionProxy()
-    await session_mcp.start_proxy_server()
-    mcp.mount(session_mcp.proxy_server)
-    for middleware in session_mcp.middleware:
-        mcp.add_middleware(middleware)
-    await mcp.run_async()
-    await session_mcp.cleanup()
+    if args.enable_proxy:
+        logging.info("enabling session proxy tools")
+        session_mcp = ColabSessionProxy()
+        await session_mcp.start_proxy_server()
+        mcp.mount(session_mcp.proxy_server)
+        for middleware in session_mcp.middleware:
+            mcp.add_middleware(middleware)
+        await session_mcp.cleanup()
+
+    try:
+        await mcp.run_async()
+    finally:
+        if crt:
+            crt.stop()
 
 
 def main() -> None:

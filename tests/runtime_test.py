@@ -1,165 +1,189 @@
-import uuid
 from unittest import mock
 
 import pytest
 from colab_mcp import runtime
-from colab_mcp.client import (
-    Accelerator,
-    AssignmentVariant,
-    ListedAssignment,
-    RuntimeProxyInfo,
-    Shape,
-)
 
 
-@pytest.fixture(autouse=True)
-def reset_runtime_tool():
-    """Reset the singleton ColabRuntimeTool before each test."""
-    runtime.ColabRuntimeTool._ColabRuntimeTool__session = None
-    runtime.ColabRuntimeTool._ColabRuntimeTool__colab_prod_client = None
-    runtime.ColabRuntimeTool._ColabRuntimeTool__kernel_client = None
-    yield
+@pytest.fixture
+def runtime_tool():
+    with mock.patch("fastmcp.FastMCP"):
+        return runtime.ColabRuntimeTool()
 
 
-@pytest.mark.asyncio
-async def test_new_colab_server():
-    notebook_id = uuid.uuid4()
+def test_session_property(runtime_tool):
     mock_session = mock.Mock()
-    mock_colab_client = mock.Mock()
-    expected_result = {"assignment": "foo"}
-    mock_colab_client.assign.return_value = expected_result
+    with mock.patch(
+        "colab_mcp.auth.GoogleOAuthClient.get_session", return_value=mock_session
+    ):
+        assert runtime_tool.session == mock_session
+        # Test memoization
+        assert runtime_tool.session == mock_session
+
+
+def test_colab_prod_client_property(runtime_tool):
+    mock_session = mock.Mock()
+    mock_client_instance = mock.Mock()
+    with (
+        mock.patch.object(
+            runtime.ColabRuntimeTool, "session", new_callable=mock.PropertyMock
+        ) as mock_session_prop,
+        mock.patch("colab_mcp.client.ColabClient", return_value=mock_client_instance),
+    ):
+        mock_session_prop.return_value = mock_session
+        assert runtime_tool.colab_prod_client == mock_client_instance
+        # Test memoization
+        assert runtime_tool.colab_prod_client == mock_client_instance
+
+
+def test_assignment_property(runtime_tool):
+    mock_client = mock.Mock()
+    mock_assignment = mock.Mock()
+    mock_client.assign.return_value = mock_assignment
+
+    with mock.patch.object(
+        runtime.ColabRuntimeTool, "colab_prod_client", new_callable=mock.PropertyMock
+    ) as mock_client_prop:
+        mock_client_prop.return_value = mock_client
+        assert runtime_tool.assignment == mock_assignment
+        mock_client.assign.assert_called_once()
+        # Test memoization
+        assert runtime_tool.assignment == mock_assignment
+        assert mock_client.assign.call_count == 1
+
+
+def test_kernels_property(runtime_tool):
+    mock_assignment = mock.Mock()
+    mock_assignment.runtime_proxy_info.url = "http://server"
+    mock_assignment.runtime_proxy_info.token = "token123"
+
+    mock_kc_instance = mock.Mock()
+    mock_kc_instance.list_kernels.return_value = [{"id": "k1"}]
 
     with (
-        mock.patch(
-            "colab_mcp.auth.GoogleOAuthClient.get_session", return_value=mock_session
-        ),
-        mock.patch("colab_mcp.client.ColabClient", return_value=mock_colab_client),
+        mock.patch.object(
+            runtime.ColabRuntimeTool, "assignment", new_callable=mock.PropertyMock
+        ) as mock_assignment_prop,
+        mock.patch("jupyter_kernel_client.KernelClient", return_value=mock_kc_instance),
     ):
-        result = runtime.ColabRuntimeTool.new_colab_server(notebook_id)
+        mock_assignment_prop.return_value = mock_assignment
+        kernels = runtime_tool.kernels
+        assert kernels == [{"id": "k1"}]
+        mock_kc_instance.list_kernels.assert_called_once()
 
-    mock_colab_client.assign.assert_called_once_with(notebook_id)
-    assert result == expected_result
+
+def test_kernel_client_property(runtime_tool):
+    mock_assignment = mock.Mock()
+    mock_assignment.runtime_proxy_info.url = "http://server"
+    mock_assignment.runtime_proxy_info.token = "token123"
+
+    mock_kc_instance = mock.Mock()
+
+    with (
+        mock.patch.object(
+            runtime.ColabRuntimeTool, "assignment", new_callable=mock.PropertyMock
+        ) as mock_assignment_prop,
+        mock.patch("jupyter_kernel_client.KernelClient", return_value=mock_kc_instance),
+    ):
+        mock_assignment_prop.return_value = mock_assignment
+        assert runtime_tool.kernel_client == mock_kc_instance
+        mock_kc_instance.start.assert_called_once()
+        # Test memoization
+        assert runtime_tool.kernel_client == mock_kc_instance
+        assert mock_kc_instance.start.call_count == 1
 
 
-@pytest.mark.asyncio
-async def test_list_all_kernel_sessions():
-    mock_session = mock.Mock()
-    mock_colab_client = mock.Mock()
-
-    assignment = ListedAssignment(
-        accelerator=Accelerator.NONE,
-        endpoint="endpoint",
-        variant=AssignmentVariant.DEFAULT,
-        machineShape=Shape.STANDARD,
-        runtimeProxyInfo=RuntimeProxyInfo(
-            token="token123", tokenExpiresInSeconds=3600, url="http://server"
-        ),
-    )
-    mock_colab_client.list_assignments.return_value = [assignment]
-
+def test_start(runtime_tool):
     mock_kc = mock.Mock()
-    mock_kc.list_kernels.return_value = [{"id": "k1"}]
+    mock_assignment = mock.Mock()
+    mock_assignment.endpoint = "vm-endpoint"
 
     with (
-        mock.patch(
-            "colab_mcp.auth.GoogleOAuthClient.get_session", return_value=mock_session
-        ),
-        mock.patch("colab_mcp.client.ColabClient", return_value=mock_colab_client),
-        mock.patch("jupyter_kernel_client.KernelClient", return_value=mock_kc),
+        mock.patch.object(
+            runtime.ColabRuntimeTool, "kernel_client", new_callable=mock.PropertyMock
+        ) as mock_kc_prop,
+        mock.patch.object(
+            runtime.ColabRuntimeTool, "assignment", new_callable=mock.PropertyMock
+        ) as mock_assignment_prop,
     ):
-        result = runtime.ColabRuntimeTool.list_all_kernel_sessions()
+        mock_kc_prop.return_value = mock_kc
+        mock_assignment_prop.return_value = mock_assignment
 
-    assert len(result) == 1
-    assert result[0]["server_url"] == "http://server"
-    assert result[0]["token"] == "token123"
-    assert result[0]["kernel"] == {"id": "k1"}
+        runtime_tool.start()
+
+        mock_kc.execute.assert_called_once_with("_colab_mcp = True")
 
 
-@pytest.mark.asyncio
-async def test_execute_code():
+def test_stop(runtime_tool):
+    mock_client = mock.Mock()
+    mock_assignment = mock.Mock()
+    mock_assignment.endpoint = "vm-endpoint"
+
+    # Test stop when assignment exists
+    with (
+        mock.patch.object(
+            runtime.ColabRuntimeTool,
+            "colab_prod_client",
+            new_callable=mock.PropertyMock,
+        ) as mock_client_prop,
+        mock.patch.object(
+            runtime.ColabRuntimeTool, "assignment", new_callable=mock.PropertyMock
+        ) as mock_assignment_prop,
+    ):
+        mock_client_prop.return_value = mock_client
+        mock_assignment_prop.return_value = mock_assignment
+
+        runtime_tool.stop()
+
+        mock_client.unassign.assert_called_once_with("vm-endpoint")
+
+    # Test stop when assignment is None
+    mock_client.unassign.reset_mock()
+    with mock.patch.object(
+        runtime.ColabRuntimeTool, "assignment", new_callable=mock.PropertyMock
+    ) as mock_assignment_prop:
+        mock_assignment_prop.return_value = None
+        runtime_tool.stop()
+        mock_client.unassign.assert_not_called()
+
+
+def test_execute_code(runtime_tool):
     mock_kc = mock.Mock()
     mock_kc.execute.return_value = {"outputs": [{"text": "hello"}]}
 
-    with mock.patch("jupyter_kernel_client.KernelClient", return_value=mock_kc):
-        result = runtime.ColabRuntimeTool.execute_code(
-            "http://server", "token123", "k1", "print('hello')"
-        )
+    with mock.patch.object(
+        runtime.ColabRuntimeTool, "kernel_client", new_callable=mock.PropertyMock
+    ) as mock_kc_prop:
+        mock_kc_prop.return_value = mock_kc
 
-    assert result == [{"text": "hello"}]
-    mock_kc.execute.assert_called_once_with("print('hello')")
-    mock_kc.start.assert_called_once()
+        result = runtime_tool.execute_code("print('hello')")
+
+        assert result == [{"text": "hello"}]
+        mock_kc.execute.assert_called_once_with("print('hello')")
 
 
-@pytest.mark.asyncio
-async def test_execute_code_no_outputs():
+def test_execute_code_no_outputs(runtime_tool):
     mock_kc = mock.Mock()
-    # Mocking return value for execute that has no outputs
     mock_kc.execute.return_value = {"status": "ok"}
 
-    with mock.patch("jupyter_kernel_client.KernelClient", return_value=mock_kc):
-        result = runtime.ColabRuntimeTool.execute_code(
-            "http://server", "token123", "k1", "print('hello')"
-        )
+    with mock.patch.object(
+        runtime.ColabRuntimeTool, "kernel_client", new_callable=mock.PropertyMock
+    ) as mock_kc_prop:
+        mock_kc_prop.return_value = mock_kc
 
-    assert result is None
+        result = runtime_tool.execute_code("print('hello')")
+
+        assert result is None
 
 
-@pytest.mark.asyncio
-async def test_execute_code_empty_reply():
+def test_execute_code_empty_reply(runtime_tool):
     mock_kc = mock.Mock()
     mock_kc.execute.return_value = None
 
-    with mock.patch("jupyter_kernel_client.KernelClient", return_value=mock_kc):
-        result = runtime.ColabRuntimeTool.execute_code(
-            "http://server", "token123", "k1", "print('hello')"
-        )
+    with mock.patch.object(
+        runtime.ColabRuntimeTool, "kernel_client", new_callable=mock.PropertyMock
+    ) as mock_kc_prop:
+        mock_kc_prop.return_value = mock_kc
 
-    assert result is None
+        result = runtime_tool.execute_code("print('hello')")
 
-
-@pytest.mark.asyncio
-async def test_list_all_kernel_sessions_no_assignments():
-    mock_session = mock.Mock()
-    mock_colab_client = mock.Mock()
-    mock_colab_client.list_assignments.return_value = []
-
-    with (
-        mock.patch(
-            "colab_mcp.auth.GoogleOAuthClient.get_session", return_value=mock_session
-        ),
-        mock.patch("colab_mcp.client.ColabClient", return_value=mock_colab_client),
-    ):
-        result = runtime.ColabRuntimeTool.list_all_kernel_sessions()
-
-    assert result == []
-
-
-@pytest.mark.asyncio
-async def test_list_all_kernel_sessions_no_kernels():
-    mock_session = mock.Mock()
-    mock_colab_client = mock.Mock()
-
-    assignment = ListedAssignment(
-        accelerator=Accelerator.NONE,
-        endpoint="endpoint",
-        variant=AssignmentVariant.DEFAULT,
-        machineShape=Shape.STANDARD,
-        runtimeProxyInfo=RuntimeProxyInfo(
-            token="token123", tokenExpiresInSeconds=3600, url="http://server"
-        ),
-    )
-    mock_colab_client.list_assignments.return_value = [assignment]
-
-    mock_kc = mock.Mock()
-    mock_kc.list_kernels.return_value = []
-
-    with (
-        mock.patch(
-            "colab_mcp.auth.GoogleOAuthClient.get_session", return_value=mock_session
-        ),
-        mock.patch("colab_mcp.client.ColabClient", return_value=mock_colab_client),
-        mock.patch("jupyter_kernel_client.KernelClient", return_value=mock_kc),
-    ):
-        result = runtime.ColabRuntimeTool.list_all_kernel_sessions()
-
-    assert result == []
+        assert result is None
