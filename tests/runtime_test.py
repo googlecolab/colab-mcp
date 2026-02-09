@@ -51,26 +51,6 @@ def test_assignment_property(runtime_tool):
         assert mock_client.assign.call_count == 1
 
 
-def test_kernels_property(runtime_tool):
-    mock_assignment = mock.Mock()
-    mock_assignment.runtime_proxy_info.url = "http://server"
-    mock_assignment.runtime_proxy_info.token = "token123"
-
-    mock_kc_instance = mock.Mock()
-    mock_kc_instance.list_kernels.return_value = [{"id": "k1"}]
-
-    with (
-        mock.patch.object(
-            runtime.ColabRuntimeTool, "assignment", new_callable=mock.PropertyMock
-        ) as mock_assignment_prop,
-        mock.patch("jupyter_kernel_client.KernelClient", return_value=mock_kc_instance),
-    ):
-        mock_assignment_prop.return_value = mock_assignment
-        kernels = runtime_tool.kernels
-        assert kernels == [{"id": "k1"}]
-        mock_kc_instance.list_kernels.assert_called_once()
-
-
 def test_kernel_client_property(runtime_tool):
     mock_assignment = mock.Mock()
     mock_assignment.runtime_proxy_info.url = "http://server"

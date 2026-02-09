@@ -40,32 +40,8 @@ class ColabRuntimeTool(object):
         return self.__assignment
 
     @property
-    def kernels(self):
-        url = self.assignment.runtime_proxy_info.url
-        token = self.assignment.runtime_proxy_info.token
-        kc = jupyter_kernel_client.KernelClient(
-            server_url=url,
-            token="unused",
-            client_kwargs={
-                "subprotocol": jupyter_kernel_client.JupyterSubprotocol.DEFAULT,
-                "extra_params": {"colab-runtime-proxy-token": token},
-            },
-            headers={
-                "X-Colab-Client-Agent": "colab-mcp",
-                "X-Colab-Runtime-Proxy-Token": self.assignment.runtime_proxy_info.token,
-            },
-        )
-        return kc.list_kernels()
-
-    @property
     def kernel_client(self):
         if not self.__kernel_client:
-            # kernels = self.kernels
-            # if not kernels:
-            #    raise RuntimeError("failed to find a usable kernel")
-
-            ## Just use the first one
-            # k = kernels[0]
             url = self.assignment.runtime_proxy_info.url
             token = self.assignment.runtime_proxy_info.token
 
