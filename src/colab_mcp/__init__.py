@@ -59,7 +59,6 @@ async def main_async():
     except PermissionError as e:
         sys.exit(f"failed to initialize authentication credentials, exiting - {e}")
 
-    crt = None
     if args.enable_runtime:
         crt = runtime.ColabRuntimeTool()
         logging.info("enabling runtime tools")
@@ -72,13 +71,17 @@ async def main_async():
         mcp.mount(session_mcp.proxy_server)
         for middleware in session_mcp.middleware:
             mcp.add_middleware(middleware)
-        await session_mcp.cleanup()
 
     try:
         await mcp.run_async()
+
     finally:
-        if crt:
-            crt.stop()
+        if args.enable_proxy:
+            await session_mcp.cleanup()
+
+        if args.enable_runtime:
+            if crt:
+                crt.stop()
 
 
 def main() -> None:
