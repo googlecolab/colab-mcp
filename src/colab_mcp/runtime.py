@@ -47,7 +47,7 @@ class ColabRuntimeTool(object):
 
             self.__kernel_client = jupyter_kernel_client.KernelClient(
                 server_url=url,
-                token="unused",
+                token=token,
                 client_kwargs={
                     "subprotocol": jupyter_kernel_client.JupyterSubprotocol.DEFAULT,
                     "extra_params": {"colab-runtime-proxy-token": token},
