@@ -2,6 +2,7 @@ import argparse
 import asyncio
 import datetime
 import logging
+import tempfile
 import sys
 
 from fastmcp import FastMCP
@@ -15,9 +16,9 @@ from colab_mcp.session import ColabSessionProxy
 mcp = FastMCP(name="ColabMCP")
 
 
-def init_logger():
+def init_logger(logdir):
     log_filename = datetime.datetime.now().strftime(
-        "logs/colab-mcp.%Y-%m-%d_%H-%M-%S.log"
+        f"{logdir}/colab-mcp.%Y-%m-%d_%H-%M-%S.log"
     )
     logging.basicConfig(
         format="%(asctime)s %(levelname)s:%(message)s",
@@ -31,6 +32,14 @@ def init_logger():
 def parse_args(v):
     parser = argparse.ArgumentParser(
         description="ColabMCP is an MCP server that lets you interact with Colab."
+    )
+    parser.add_argument(
+        "-l",
+        "--log",
+        help="if set, use this directory as a location for logfiles (if unset, will log to %s/colab-mcp-logs/)"
+        % tempfile.gettempdir(),
+        action="store",
+        default=tempfile.mkdtemp(prefix="colab-mcp-logs-"),
     )
     parser.add_argument(
         "-r",
@@ -51,7 +60,7 @@ def parse_args(v):
 
 async def main_async():
     args = parse_args(sys.argv[1:])
-    init_logger()
+    init_logger(args.log)
 
     # preemptively initialize credentials when we start so they're available
     try:
