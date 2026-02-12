@@ -18,6 +18,7 @@ from websockets.typing import Subprotocol
 WEB_SOCKET_PORT = 9998
 
 COLAB = "https://colab.google.com"
+SCRATCH_PATH = "/notebooks/empty.ipynb"
 
 
 class ColabWebSocketServer:
@@ -140,7 +141,7 @@ class ColabWebSocketServer:
             origins=self.allowed_origins,
             process_request=self._validate_authorization,
         )
-        webbrowser.open_new(f"{COLAB}/#mcpProxyToken={self.token}")
+        webbrowser.open_new(f"{COLAB}{SCRATCH_PATH}#mcpProxyToken={self.token}")
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):

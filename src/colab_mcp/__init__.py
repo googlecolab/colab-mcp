@@ -62,13 +62,12 @@ async def main_async():
     args = parse_args(sys.argv[1:])
     init_logger(args.log)
 
-    # preemptively initialize credentials when we start so they're available
-    try:
-        auth.GoogleOAuthClient.get_session()
-    except PermissionError as e:
-        sys.exit(f"failed to initialize authentication credentials, exiting - {e}")
-
     if args.enable_runtime:
+        # preemptively initialize credentials when we start so they're available
+        try:
+            auth.GoogleOAuthClient.get_session()
+        except PermissionError as e:
+            sys.exit(f"failed to initialize authentication credentials, exiting - {e}")
         crt = runtime.ColabRuntimeTool()
         logging.info("enabling runtime tools")
         mcp.mount(crt.mcp, prefix="runtime")

@@ -221,5 +221,5 @@ async def test_token_in_url():
 async def test_browser_opens_on_startup(mock_open):
     async with ColabWebSocketServer(port=TEST_PORT) as server:
         mock_open.assert_called_once_with(
-            f"https://colab.google.com/#mcpProxyToken={server.token}"
+            f"https://colab.google.com/notebooks/empty.ipynb#mcpProxyToken={server.token}"
         )
