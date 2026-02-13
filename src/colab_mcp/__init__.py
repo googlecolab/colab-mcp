@@ -71,10 +71,10 @@ def parse_args(v):
     )
     parser.add_argument(
         "-c",
-        "--client-secret",
-        help="client secrets JSON config",
+        "--client-oauth-config",
+        help="client oauth config json",
         action="store",
-        default="client-secret.json",
+        default="colab-mcp-oauth-config.json",
     )
     return parser.parse_args(v)
 
@@ -86,7 +86,7 @@ async def main_async():
     if args.enable_runtime:
         # preemptively initialize credentials when we start so they're available
         try:
-            auth.get_credentials(args.client_secret)
+            auth.get_credentials(args.client_oauth_config)
             auth.GoogleOAuthClient.get_session()
         except PermissionError as e:
             sys.exit(f"failed to initialize authentication credentials, exiting - {e}")
