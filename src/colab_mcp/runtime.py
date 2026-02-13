@@ -38,7 +38,11 @@ class ColabRuntimeTool(object):
     @property
     def session(self):
         if not self.__session:
-            self.__session = auth.GoogleOAuthClient.get_session()
+            # A bit cheeky - we passed the client secret the first time,
+            # we don't need it this time because we should have a token config.
+            # Not great, but keeps us from having to keep track of the client auth config
+            # here.
+            self.__session = auth.get_credentials(None)
         return self.__session
 
     @property

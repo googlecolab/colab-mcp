@@ -26,9 +26,7 @@ def runtime_tool():
 
 def test_session_property(runtime_tool):
     mock_session = mock.Mock()
-    with mock.patch(
-        "colab_mcp.auth.GoogleOAuthClient.get_session", return_value=mock_session
-    ):
+    with mock.patch("colab_mcp.auth.get_credentials", return_value=mock_session):
         assert runtime_tool.session == mock_session
         # Test memoization
         assert runtime_tool.session == mock_session

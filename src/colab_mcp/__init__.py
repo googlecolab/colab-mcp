@@ -69,6 +69,13 @@ def parse_args(v):
         action="store_true",
         default=True,
     )
+    parser.add_argument(
+        "-c",
+        "--client-secret",
+        help="client secrets JSON config",
+        action="store",
+        default="client-secret.json",
+    )
     return parser.parse_args(v)
 
 
@@ -79,9 +86,11 @@ async def main_async():
     if args.enable_runtime:
         # preemptively initialize credentials when we start so they're available
         try:
+            auth.get_credentials(args.client_secret)
             auth.GoogleOAuthClient.get_session()
         except PermissionError as e:
             sys.exit(f"failed to initialize authentication credentials, exiting - {e}")
+
         crt = runtime.ColabRuntimeTool()
         logging.info("enabling runtime tools")
         mcp.mount(crt.mcp, prefix="runtime")
