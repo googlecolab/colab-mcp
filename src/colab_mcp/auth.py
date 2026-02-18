@@ -19,8 +19,9 @@ from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google.auth.transport import requests
 
+OAUTH_SERVER_PORT = 53919
+
 SCOPES = [
-    "openid",
     "https://www.googleapis.com/auth/userinfo.profile",
     "https://www.googleapis.com/auth/userinfo.email",
     "https://www.googleapis.com/auth/colaboratory",
@@ -39,7 +40,7 @@ def get_credentials(config):
             creds.refresh(Request())
         else:
             flow = InstalledAppFlow.from_client_secrets_file(config, SCOPES)
-            creds = flow.run_local_server(port=9100)
+            creds = flow.run_local_server(port=OAUTH_SERVER_PORT)
 
         with open(TOKEN_CONFIG_PATH, "w") as token:
             token.write(creds.to_json())
