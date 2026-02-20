@@ -47,12 +47,6 @@ class Prod(ColabEnvironment):
     api: str = "https://colab.pa.googleapis.com"
 
 
-@dataclass
-class Sandbox(ColabEnvironment):
-    domain: str = "https://colab.sandbox.google.com"
-    api: str = "https://staging-colab.sandbox.googleapis.com"
-
-
 def uuid_to_web_safe_base64(uuid: uuid.UUID) -> str:
     uuid_str = str(uuid)
     # Replace hyphens with underscores
