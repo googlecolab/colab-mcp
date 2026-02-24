@@ -17,17 +17,9 @@ from colab_mcp.websocket_server import ColabWebSocketServer
 from mcp.types import JSONRPCRequest, JSONRPCResponse, JSONRPCMessage
 from mcp.shared.message import SessionMessage
 import pytest
-from unittest.mock import patch
 import websockets
 
 TEST_PORT = 9876
-
-
-@pytest.fixture(autouse=True)
-def no_browser_open(monkeypatch):
-    import webbrowser
-
-    monkeypatch.setattr(webbrowser, "open_new", lambda *a, **k: True)
 
 
 @pytest.mark.asyncio
@@ -228,12 +220,3 @@ async def test_token_in_url():
 
         assert not server.connection_live.is_set()
         assert not server.connection_lock.locked()
-
-
-@pytest.mark.asyncio
-@patch("colab_mcp.websocket_server.webbrowser.open_new")
-async def test_browser_opens_on_startup(mock_open):
-    async with ColabWebSocketServer(port=TEST_PORT) as server:
-        mock_open.assert_called_once_with(
-            f"https://colab.google.com/notebooks/empty.ipynb#mcpProxyToken={server.token}"
-        )

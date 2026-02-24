@@ -13,10 +13,14 @@
 # limitations under the License.
 
 import asyncio
-from colab_mcp import session
+from colab_mcp import session, websocket_server
+from fastmcp import Client, FastMCP
 from fastmcp.server.middleware import MiddlewareContext
 import pytest
-from unittest.mock import patch, AsyncMock, Mock
+from unittest.mock import patch, AsyncMock, Mock, call
+
+TEST_PROXY_TOKEN = "test_token"
+TEST_PROXY_PORT = 1111
 
 
 @pytest.fixture(autouse=True)
@@ -26,10 +30,24 @@ def no_browser_open(monkeypatch):
     monkeypatch.setattr(webbrowser, "open_new", lambda *a, **k: True)
 
 
+@pytest.fixture(autouse=True)
+def instant_timeout(monkeypatch):
+    monkeypatch.setattr(session, "UI_CONNECTION_TIMEOUT", 0.1)
+
+
 @pytest.fixture
 def mock_wss():
     """Provides a mock ColabWebSocketServer instance."""
     return MockColabWebSocketServer()
+
+
+def assertExpectedContextCalls(mock_set_state, mock_wss):
+    expected_set_context_calls = [
+        call("fe_connect_event", mock_wss.connection_live),
+        call("proxy_token", TEST_PROXY_TOKEN),
+        call("proxy_port", TEST_PROXY_PORT),
+    ]
+    mock_set_state.assert_has_calls(expected_set_context_calls)
 
 
 class MockColabWebSocketServer:
@@ -37,6 +55,8 @@ class MockColabWebSocketServer:
         self.connection_live = asyncio.Event()
         self.read_stream = AsyncMock()
         self.write_stream = AsyncMock()
+        self.token = TEST_PROXY_TOKEN
+        self.port = TEST_PROXY_PORT
 
     async def __aenter__(self):
         return self
@@ -61,8 +81,8 @@ class TestColabProxyMiddleware:
 
         await middleware.on_message(context, call_next)
 
+        assertExpectedContextCalls(context.fastmcp_context.set_state, mock_wss)
         call_next.assert_called_once_with(context)
-        context.fastmcp_context.set_state.assert_called_once_with("fe_connected", True)
         assert middleware.last_message_connected is True
         context.fastmcp_context.send_prompt_list_changed.assert_called_once()
         context.fastmcp_context.send_resource_list_changed.assert_called_once()
@@ -83,8 +103,8 @@ class TestColabProxyMiddleware:
 
         await middleware.on_message(context, call_next)
 
+        assertExpectedContextCalls(context.fastmcp_context.set_state, mock_wss)
         call_next.assert_called_once_with(context)
-        context.fastmcp_context.set_state.assert_called_once_with("fe_connected", False)
         assert middleware.last_message_connected is False
         context.fastmcp_context.send_prompt_list_changed.assert_called_once()
         context.fastmcp_context.send_resource_list_changed.assert_called_once()
@@ -104,8 +124,8 @@ class TestColabProxyMiddleware:
 
         await middleware.on_message(context, call_next)
 
+        assertExpectedContextCalls(context.fastmcp_context.set_state, mock_wss)
         call_next.assert_called_once_with(context)
-        context.fastmcp_context.set_state.assert_called_once_with("fe_connected", True)
         assert middleware.last_message_connected is True
         context.fastmcp_context.send_prompt_list_changed.assert_not_called()
         context.fastmcp_context.send_resource_list_changed.assert_not_called()
@@ -146,7 +166,7 @@ class TestColabSessionProxy:
     @patch("colab_mcp.session.ColabWebSocketServer")
     @patch("colab_mcp.session.ColabProxyClient")
     @patch("colab_mcp.session.ColabProxyMiddleware")
-    async def test_start_proxy_server(
+    async def test_start_proxy_server_startup(
         self,
         mock_colab_proxy_middleware,
         mock_colab_proxy_client,
@@ -161,3 +181,28 @@ class TestColabSessionProxy:
         assert proxy.proxy_server is not None
         mock_colab_proxy_middleware.assert_called_once()
         mock_tool_injection_middleware.assert_called_once()
+
+
+class TestCheckSessionProxyTool:
+    @pytest.mark.asyncio
+    @patch("colab_mcp.session.webbrowser.open_new")
+    async def test_tool(self, mock_open, monkeypatch):
+        monkeypatch.setattr(
+            websocket_server.secrets,
+            "token_urlsafe",
+            lambda nbytes=None: TEST_PROXY_TOKEN,
+        )
+        testServer = FastMCP(name="test server")
+        session_mcp = session.ColabSessionProxy()
+        await session_mcp.start_proxy_server()
+        testServer.mount(session_mcp.proxy_server)
+        for middleware in session_mcp.middleware:
+            testServer.add_middleware(middleware)
+        async with Client(testServer) as testClient:
+            tools = await testClient.list_tools()
+            assert tools[0].name == "open_colab_browser_connection"
+            await testClient.call_tool("open_colab_browser_connection")
+        await session_mcp.cleanup()
+        mock_open.assert_called_once_with(
+            f"https://colab.google.com/notebooks/empty.ipynb#mcpProxyToken={TEST_PROXY_TOKEN}&mcpProxyPort=9998"
+        )

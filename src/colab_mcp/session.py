@@ -18,14 +18,22 @@ import contextlib
 from contextlib import AsyncExitStack
 from fastmcp import FastMCP, Client
 from fastmcp.client.transports import ClientTransport
-from fastmcp.server.dependencies import get_context
+from fastmcp.dependencies import CurrentContext
+from fastmcp.server.context import Context
 from fastmcp.server.middleware import Middleware, MiddlewareContext
 from fastmcp.server.middleware.tool_injection import ToolInjectionMiddleware
 from fastmcp.server.proxy import FastMCPProxy
 from fastmcp.tools.tool import Tool
 from mcp.client.session import ClientSession
+import webbrowser
 
-from colab_mcp.websocket_server import ColabWebSocketServer
+from colab_mcp.websocket_server import ColabWebSocketServer, COLAB, SCRATCH_PATH
+
+UI_CONNECTION_TIMEOUT = 60.0  # secs
+
+FE_CONNECT_EVENT_KEY = "fe_connect_event"
+PROXY_TOKEN_KEY = "proxy_token"
+PROXY_PORT_KEY = "proxy_port"
 
 
 class ColabProxyMiddleware(Middleware):
@@ -38,15 +46,23 @@ class ColabProxyMiddleware(Middleware):
         Check for a change to Colab session connectivity on any communication with this MCP server and
         notify the client when the connectivity status has changed.
         """
+        context.fastmcp_context.set_state(
+            FE_CONNECT_EVENT_KEY, self.wss.connection_live
+        )
+        context.fastmcp_context.set_state(PROXY_TOKEN_KEY, self.wss.token)
+        context.fastmcp_context.set_state(PROXY_PORT_KEY, self.wss.port)
+
+        result = await call_next(context)
+
         connected = self.wss.connection_live.is_set()
         connection_state_changed = connected != self.last_message_connected
-        context.fastmcp_context.set_state("fe_connected", connected)
         self.last_message_connected = connected
         if connection_state_changed:
             await context.fastmcp_context.send_prompt_list_changed()
             await context.fastmcp_context.send_resource_list_changed()
             await context.fastmcp_context.send_tool_list_changed()
-        return await call_next(context)
+
+        return result
 
 
 class ColabTransport(ClientTransport):
@@ -94,15 +110,43 @@ class ColabProxyClient:
         await self._exit_stack.aclose()
 
 
-async def check_session_proxy_tool_fn() -> bool:
-    ctx = get_context()
-    return ctx.get_state("fe_connected")
+async def check_session_proxy_tool_fn(ctx: Context = CurrentContext()) -> bool:
+    connect_event = ctx.get_state(FE_CONNECT_EVENT_KEY)
+    token = ctx.get_state(PROXY_TOKEN_KEY)
+    port = ctx.get_state(PROXY_PORT_KEY)
+    if connect_event.is_set():
+        return True
+    with contextlib.suppress(asyncio.TimeoutError):
+        await ctx.report_progress(
+            progress=1, total=3, message="The user is not connected to the Colab UI"
+        )
+        webbrowser.open_new(
+            f"{COLAB}{SCRATCH_PATH}#mcpProxyToken={token}&mcpProxyPort={port}"
+        )
+        await ctx.report_progress(
+            progress=2,
+            total=3,
+            message="Waiting for user to connect in Colab - will wait for 60s",
+        )
+        await asyncio.wait_for(connect_event.wait(), timeout=UI_CONNECTION_TIMEOUT)
+    if connect_event.is_set():
+        await ctx.report_progress(
+            progress=3, total=3, message="The Colab UI is successfully connected!"
+        )
+        return True
+    else:
+        await ctx.report_progress(
+            progress=3,
+            total=3,
+            message="Timeout while waiting for the user to connect.",
+        )
+        return False
 
 
 check_session_proxy_tool = Tool.from_function(
     fn=check_session_proxy_tool_fn,
-    name="check_colab_actions",
-    description="Check if there are available actions for the user's active Google Colab session.",
+    name="open_colab_browser_connection",
+    description="Opens a connection to a Google Colab browser session. If the user is trying to edit a notebook in Google Colab, this needs to happen first. Returns True if the connection was successful and False if the connection failed",
 )
 
 
@@ -118,7 +162,7 @@ class ColabSessionProxy:
         proxy_client = await self._exit_stack.enter_async_context(ColabProxyClient(wss))
         self.proxy_server = FastMCPProxy(
             client_factory=proxy_client.client_factory,
-            instructions="Connects to a user's active Google Colab session and allows for interactions with their Google Colab notebook",
+            instructions="Connects to a user's Google Colab session in a browser and allows for interactions with their Google Colab notebook",
         )
         # ColabProxyMiddleware must be first because it sets the fe_connected state
         self.middleware.append(ColabProxyMiddleware(wss))
