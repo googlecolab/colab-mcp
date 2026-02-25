@@ -19,14 +19,12 @@ from mcp.shared.message import SessionMessage
 import pytest
 import websockets
 
-TEST_PORT = 9876
-
 
 @pytest.mark.asyncio
 async def test_successful_connection():
-    async with ColabWebSocketServer(port=TEST_PORT) as server:
+    async with ColabWebSocketServer() as server:
         client = await websockets.connect(
-            f"ws://localhost:{TEST_PORT}",
+            f"ws://localhost:{server.port}",
             origin="https://colab.google.com",
             subprotocols=["mcp"],
             additional_headers={"Authorization": f"Bearer {server.token}"},
@@ -44,10 +42,10 @@ async def test_successful_connection():
 
 @pytest.mark.asyncio
 async def test_unauthorized_origin_rejected():
-    async with ColabWebSocketServer(port=TEST_PORT) as server:
+    async with ColabWebSocketServer() as server:
         with pytest.raises(websockets.exceptions.InvalidStatus):
             await websockets.connect(
-                f"ws://localhost:{TEST_PORT}",
+                f"ws://localhost:{server.port}",
                 origin="https://wrong.com",
                 subprotocols=["mcp"],
                 additional_headers={"Authorization": f"Bearer {server.token}"},
@@ -57,9 +55,9 @@ async def test_unauthorized_origin_rejected():
 
 @pytest.mark.asyncio
 async def test_second_connection_rejected():
-    async with ColabWebSocketServer(port=TEST_PORT) as server:
+    async with ColabWebSocketServer() as server:
         client1 = await websockets.connect(
-            f"ws://localhost:{TEST_PORT}",
+            f"ws://localhost:{server.port}",
             origin="https://colab.google.com",
             subprotocols=["mcp"],
             additional_headers={"Authorization": f"Bearer {server.token}"},
@@ -67,7 +65,7 @@ async def test_second_connection_rejected():
         assert server.connection_live.is_set()
 
         client2 = await websockets.connect(
-            f"ws://localhost:{TEST_PORT}",
+            f"ws://localhost:{server.port}",
             origin="https://colab.google.com",
             subprotocols=["mcp"],
             additional_headers={"Authorization": f"Bearer {server.token}"},
@@ -90,9 +88,9 @@ async def test_second_connection_rejected():
 
 @pytest.mark.asyncio
 async def test_incoming_message_handling():
-    async with ColabWebSocketServer(port=TEST_PORT) as server:
+    async with ColabWebSocketServer() as server:
         client = await websockets.connect(
-            f"ws://localhost:{TEST_PORT}",
+            f"ws://localhost:{server.port}",
             origin="https://colab.google.com",
             subprotocols=["mcp"],
             additional_headers={"Authorization": f"Bearer {server.token}"},
@@ -116,9 +114,9 @@ async def test_incoming_message_handling():
 
 @pytest.mark.asyncio
 async def test_outgoing_message_handling():
-    async with ColabWebSocketServer(port=TEST_PORT) as server:
+    async with ColabWebSocketServer() as server:
         client = await websockets.connect(
-            f"ws://localhost:{TEST_PORT}",
+            f"ws://localhost:{server.port}",
             origin="https://colab.google.com",
             subprotocols=["mcp"],
             additional_headers={"Authorization": f"Bearer {server.token}"},
@@ -142,9 +140,9 @@ async def test_outgoing_message_handling():
 
 @pytest.mark.asyncio
 async def test_malformed_incoming_message():
-    async with ColabWebSocketServer(port=TEST_PORT) as server:
+    async with ColabWebSocketServer() as server:
         client = await websockets.connect(
-            f"ws://localhost:{TEST_PORT}",
+            f"ws://localhost:{server.port}",
             origin="https://colab.google.com",
             subprotocols=["mcp"],
             additional_headers={"Authorization": f"Bearer {server.token}"},
@@ -165,9 +163,9 @@ async def test_bad_token():
         websockets.exceptions.InvalidStatus,
         check=lambda e: e.response.status_code == 403,
     ):
-        async with ColabWebSocketServer(port=TEST_PORT):
+        async with ColabWebSocketServer() as server:
             await websockets.connect(
-                f"ws://localhost:{TEST_PORT}",
+                f"ws://localhost:{server.port}",
                 origin="https://colab.google.com",
                 subprotocols=["mcp"],
                 additional_headers={"Authorization": "Bearer bad_token"},
@@ -180,9 +178,9 @@ async def test_no_auth():
         websockets.exceptions.InvalidStatus,
         check=lambda e: e.response.status_code == 401,
     ):
-        async with ColabWebSocketServer(port=TEST_PORT):
+        async with ColabWebSocketServer() as server:
             await websockets.connect(
-                f"ws://localhost:{TEST_PORT}",
+                f"ws://localhost:{server.port}",
                 origin="https://colab.google.com",
                 subprotocols=["mcp"],
             )
@@ -194,9 +192,9 @@ async def test_malformed_auth_header():
         websockets.exceptions.InvalidStatus,
         check=lambda e: e.response.status_code == 400,
     ):
-        async with ColabWebSocketServer(port=TEST_PORT) as server:
+        async with ColabWebSocketServer() as server:
             await websockets.connect(
-                f"ws://localhost:{TEST_PORT}",
+                f"ws://localhost:{server.port}",
                 origin="https://colab.google.com",
                 subprotocols=["mcp"],
                 additional_headers={"Authorization": f"Bearer?{server.token}"},
@@ -205,9 +203,9 @@ async def test_malformed_auth_header():
 
 @pytest.mark.asyncio
 async def test_token_in_url():
-    async with ColabWebSocketServer(port=TEST_PORT) as server:
+    async with ColabWebSocketServer() as server:
         client = await websockets.connect(
-            f"ws://localhost:{TEST_PORT}?access_token={server.token}",
+            f"ws://localhost:{server.port}?access_token={server.token}",
             origin="https://colab.google.com",
             subprotocols=["mcp"],
         )

@@ -20,7 +20,6 @@ import mcp.types as types
 from mcp.shared.message import SessionMessage
 from pydantic_core import ValidationError
 import secrets
-import socket
 import websockets
 from websockets.asyncio.server import ServerConnection
 from websockets.datastructures import Headers
@@ -28,7 +27,6 @@ from websockets.exceptions import ConnectionClosed
 from websockets.http11 import Request, Response
 from websockets.typing import Subprotocol
 
-WEB_SOCKET_PORT = 9998
 
 COLAB = "https://colab.google.com"
 SCRATCH_PATH = "/notebooks/empty.ipynb"
@@ -40,9 +38,9 @@ class ColabWebSocketServer:
     from a Google Colab session (colab.google.com).
     """
 
-    def __init__(self, host="localhost", port=WEB_SOCKET_PORT):
+    def __init__(self, host="localhost"):
         self.host = host
-        self.port = port
+        self.port = 0
         self.connection_lock = asyncio.Lock()
         self.connection_live = asyncio.Event()
         self.allowed_origins = [COLAB]
@@ -142,18 +140,16 @@ class ColabWebSocketServer:
                 self.connection_live.clear()
 
     async def __aenter__(self):
-        logging.info(f"Starting WebSocket server on ws://{self.host}:{self.port}")
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        # Set the SO_REUSEADDR option to allow the address to be reused immediately
-        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        sock.bind((self.host, self.port))
         self._server = await websockets.serve(
             self._connection_handler,
-            sock=sock,
+            host=self.host,
+            port=0,
             subprotocols=[Subprotocol("mcp")],
             origins=self.allowed_origins,
             process_request=self._validate_authorization,
         )
+        self.port = self._server.sockets[0].getsockname()[1]
+        logging.info(f"Starting WebSocket server on ws://{self.host}:{self.port}")
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):

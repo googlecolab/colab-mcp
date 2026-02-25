@@ -207,7 +207,7 @@ class TestCheckSessionProxyTool:
         await session_mcp.cleanup()
 
         mock_open.assert_called_once_with(
-            f"https://colab.google.com/notebooks/empty.ipynb#mcpProxyToken={TEST_PROXY_TOKEN}&mcpProxyPort=9998"
+            f"https://colab.google.com/notebooks/empty.ipynb#mcpProxyToken={TEST_PROXY_TOKEN}&mcpProxyPort={session_mcp.wss.port}"
         )
 
     @pytest.mark.asyncio
