@@ -17,7 +17,7 @@ from colab_mcp import session, websocket_server
 from fastmcp import Client, FastMCP
 from fastmcp.server.middleware import MiddlewareContext
 import pytest
-from unittest.mock import patch, AsyncMock, Mock, call
+from unittest.mock import patch, call, AsyncMock, Mock
 
 TEST_PROXY_TOKEN = "test_token"
 TEST_PROXY_PORT = 1111
@@ -43,7 +43,7 @@ def mock_wss():
 
 def assertExpectedContextCalls(mock_set_state, mock_wss):
     expected_set_context_calls = [
-        call("fe_connect_event", mock_wss.connection_live),
+        call("fe_connected", mock_wss.connection_live.is_set()),
         call("proxy_token", TEST_PROXY_TOKEN),
         call("proxy_port", TEST_PROXY_PORT),
     ]
@@ -198,11 +198,33 @@ class TestCheckSessionProxyTool:
         testServer.mount(session_mcp.proxy_server)
         for middleware in session_mcp.middleware:
             testServer.add_middleware(middleware)
+
         async with Client(testServer) as testClient:
             tools = await testClient.list_tools()
             assert tools[0].name == "open_colab_browser_connection"
-            await testClient.call_tool("open_colab_browser_connection")
+            result = await testClient.call_tool("open_colab_browser_connection")
+            assert not result.structured_content["result"]  # is False
         await session_mcp.cleanup()
+
         mock_open.assert_called_once_with(
             f"https://colab.google.com/notebooks/empty.ipynb#mcpProxyToken={TEST_PROXY_TOKEN}&mcpProxyPort=9998"
         )
+
+    @pytest.mark.asyncio
+    async def test_tool_middleware_injects_new_connection(self, mock_wss):
+        testServer = FastMCP(name="test server")
+        session_mcp = session.ColabSessionProxy()
+        await session_mcp.start_proxy_server()
+        testServer.mount(session_mcp.proxy_server)
+        for middleware in session_mcp.middleware:
+            testServer.add_middleware(middleware)
+
+        async with Client(testServer) as testClient:
+            tools = await testClient.list_tools()
+            assert tools[0].name == "open_colab_browser_connection"
+            result = testClient.call_tool("open_colab_browser_connection")
+            result_coroutine = testClient.call_tool("open_colab_browser_connection")
+            session_mcp.wss.connection_live.set()
+            result = await result_coroutine
+            assert result.structured_content["result"]  # is True
+        await session_mcp.cleanup()
