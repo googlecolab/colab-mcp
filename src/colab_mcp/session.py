@@ -23,8 +23,9 @@ from fastmcp.server.context import Context
 from fastmcp.server.middleware import Middleware, MiddlewareContext
 from fastmcp.server.middleware.tool_injection import ToolInjectionMiddleware
 from fastmcp.server.proxy import FastMCPProxy
-from fastmcp.tools.tool import Tool
+from fastmcp.tools.tool import Tool, ToolResult
 from mcp.client.session import ClientSession
+from mcp.types import TextContent
 import webbrowser
 
 from colab_mcp.websocket_server import ColabWebSocketServer, COLAB, SCRATCH_PATH
@@ -86,16 +87,20 @@ class ColabProxyMiddleware(Middleware):
             await context.fastmcp_context.report_progress(
                 progress=3, total=3, message="The Colab UI is successfully connected!"
             )
-            result.structured_content["result"] = True
-            return result
+            return ToolResult(
+                content=[TextContent(type="text", text="true")],
+                structured_content={"result": True},
+            )
         else:
             await context.fastmcp_context.report_progress(
                 progress=3,
                 total=3,
                 message="Timeout while waiting for the user to connect.",
             )
-            result.structured_content["result"] = False
-            return result
+            return ToolResult(
+                content=[TextContent(type="text", text="false")],
+                structured_content={"result": False},
+            )
 
 
 class ColabTransport(ClientTransport):
