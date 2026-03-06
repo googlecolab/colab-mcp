@@ -234,7 +234,7 @@ requires-dist = [
     { name = "anyio", specifier = ">=4.5" },
     { name = "fastmcp", specifier = ">=2.2.0" },
     { name = "google-auth-oauthlib", specifier = ">=0.7.0" },
-    { name = "jupyter-kernel-client", git = "https://github.com/googlecolab/jupyter-kernel-client" },
+    { name = "jupyter-kernel-client", specifier = ">=0.9.0" },
     { name = "mcp", extras = ["cli"], specifier = ">=1.20.0" },
     { name = "pydantic", specifier = ">=2.12.3,<3.0.0" },
     { name = "requests", specifier = ">=2.32.5" },
@@ -247,7 +247,7 @@ commit = [{ name = "pre-commit", specifier = ">=4.3.0" }]
 dev = [
     { name = "coverage", specifier = ">=7.13.1" },
     { name = "fastmcp", specifier = ">=2.2.0" },
-    { name = "jupyter-kernel-client", git = "https://github.com/googlecolab/jupyter-kernel-client" },
+    { name = "jupyter-kernel-client" },
     { name = "pytest", specifier = ">=8.4.2" },
     { name = "pytest-asyncio", specifier = ">=1.2.0" },
     { name = "pytest-cov", specifier = ">=7.0.0" },
@@ -764,8 +764,8 @@ wheels = [
 
 [[package]]
 name = "jupyter-kernel-client"
-version = "0.8.0"
-source = { git = "https://github.com/googlecolab/jupyter-kernel-client#f18e982c3265df5e923aa9def101ab3fd737e139" }
+version = "0.9.0"
+source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "jupyter-client" },
     { name = "jupyter-core" },
@@ -774,6 +774,9 @@ dependencies = [
     { name = "traitlets" },
     { name = "typing-extensions" },
     { name = "websocket-client" },
+]
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/7a/68/287315ba355aa93bda2e344de5febc45e6de1b47d8f4a5b69400b24cfdfd/jupyter_kernel_client-0.9.0-py3-none-any.whl", hash = "sha256:77acb8f2f738d97625d6bd01ee8cf21c4d59790b7ba464108712db3870416f20", size = 40097, upload-time = "2026-02-11T06:42:05.133Z" },
 ]
 
 [[package]]

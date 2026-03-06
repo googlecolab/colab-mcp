@@ -25,6 +25,7 @@ SCOPES = [
     "https://www.googleapis.com/auth/userinfo.profile",
     "https://www.googleapis.com/auth/userinfo.email",
     "https://www.googleapis.com/auth/colaboratory",
+    "openid",
 ]
 
 TOKEN_CONFIG_PATH = os.path.expanduser("~/.colab-mcp-auth-token.json")
