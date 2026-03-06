@@ -38,71 +38,6 @@ PROXY_PORT_KEY = "proxy_port"
 INJECTED_TOOL_NAME = "open_colab_browser_connection"
 
 
-class ColabProxyMiddleware(Middleware):
-    def __init__(self, wss: ColabWebSocketServer):
-        self.wss = wss
-        self.last_message_connected = self.wss.connection_live.is_set()
-
-    async def on_message(self, context: MiddlewareContext, call_next):
-        """
-        Check for a change to Colab session connectivity on any communication with this MCP server and
-        notify the client when the connectivity status has changed.
-        """
-        context.fastmcp_context.set_state(
-            FE_CONNECTED_KEY, self.wss.connection_live.is_set()
-        )
-        context.fastmcp_context.set_state(PROXY_TOKEN_KEY, self.wss.token)
-        context.fastmcp_context.set_state(PROXY_PORT_KEY, self.wss.port)
-
-        result = await call_next(context)
-
-        connected = self.wss.connection_live.is_set()
-        connection_state_changed = connected != self.last_message_connected
-        self.last_message_connected = connected
-        if connection_state_changed:
-            await context.fastmcp_context.send_prompt_list_changed()
-            await context.fastmcp_context.send_resource_list_changed()
-            await context.fastmcp_context.send_tool_list_changed()
-
-        return result
-
-    async def on_call_tool(self, context, call_next):
-        result = await call_next(context)
-        if context.message.name != INJECTED_TOOL_NAME:
-            return result
-        # if the tool call was for open_colab_browser_connection, try to await full connection
-        with contextlib.suppress(asyncio.TimeoutError):
-            await context.fastmcp_context.report_progress(
-                progress=1, total=3, message="The user is not connected to the Colab UI"
-            )
-            await context.fastmcp_context.report_progress(
-                progress=2,
-                total=3,
-                message="Waiting for user to connect in Colab - will wait for 60s",
-            )
-            await asyncio.wait_for(
-                self.wss.connection_live.wait(), timeout=UI_CONNECTION_TIMEOUT
-            )
-        if self.wss.connection_live.is_set():
-            await context.fastmcp_context.report_progress(
-                progress=3, total=3, message="The Colab UI is successfully connected!"
-            )
-            return ToolResult(
-                content=[TextContent(type="text", text="true")],
-                structured_content={"result": True},
-            )
-        else:
-            await context.fastmcp_context.report_progress(
-                progress=3,
-                total=3,
-                message="Timeout while waiting for the user to connect.",
-            )
-            return ToolResult(
-                content=[TextContent(type="text", text="false")],
-                structured_content={"result": False},
-            )
-
-
 class ColabTransport(ClientTransport):
     def __init__(self, wss: ColabWebSocketServer):
         self.wss = wss
@@ -126,8 +61,22 @@ class ColabProxyClient:
         self._exit_stack = AsyncExitStack()
         self._start_task = None
 
+    def is_connected(self):
+        return self.wss.connection_live.is_set() and self.proxy_mcp_client is not None
+
+    async def await_proxy_connection(self):
+        with contextlib.suppress(asyncio.TimeoutError):
+            # wait for the connection to be live and for the proxy client to fully initialize
+            connection_tasks = asyncio.gather(
+                self.wss.connection_live.wait(), self._start_task
+            )
+            await asyncio.wait_for(
+                connection_tasks,
+                timeout=UI_CONNECTION_TIMEOUT,
+            )
+
     def client_factory(self):
-        if self.wss.connection_live.is_set() and self.proxy_mcp_client is not None:
+        if self.is_connected():
             return self.proxy_mcp_client
         # return a client mapped to a stubbed mcp server if there is no session proxy
         return self.stubbed_mcp_client
@@ -148,6 +97,68 @@ class ColabProxyClient:
         await self._exit_stack.aclose()
 
 
+class ColabProxyMiddleware(Middleware):
+    def __init__(self, proxy_client: ColabProxyClient):
+        self.proxy_client = proxy_client
+        self.last_message_connected = self.proxy_client.is_connected()
+
+    async def on_message(self, context: MiddlewareContext, call_next):
+        """
+        Check for a change to Colab session connectivity on any communication with this MCP server and
+        notify the client when the connectivity status has changed.
+        """
+        context.fastmcp_context.set_state(
+            FE_CONNECTED_KEY, self.proxy_client.is_connected()
+        )
+        context.fastmcp_context.set_state(PROXY_TOKEN_KEY, self.proxy_client.wss.token)
+        context.fastmcp_context.set_state(PROXY_PORT_KEY, self.proxy_client.wss.port)
+
+        result = await call_next(context)
+
+        connected = self.proxy_client.is_connected()
+        connection_state_changed = connected != self.last_message_connected
+        self.last_message_connected = connected
+        if connection_state_changed:
+            await context.fastmcp_context.send_tool_list_changed()
+
+        return result
+
+    async def on_call_tool(self, context, call_next):
+        result = await call_next(context)
+        if context.message.name != INJECTED_TOOL_NAME:
+            return result
+        if self.proxy_client.is_connected():
+            return result
+        # if the tool call was for open_colab_browser_connection and there is no existing connection, try to await full connection
+        await context.fastmcp_context.report_progress(
+            progress=1, total=3, message="The user is not connected to the Colab UI"
+        )
+        await context.fastmcp_context.report_progress(
+            progress=2,
+            total=3,
+            message="Waiting for user to connect in Colab - will wait for 60s",
+        )
+        await self.proxy_client.await_proxy_connection()
+        if self.proxy_client.is_connected():
+            await context.fastmcp_context.report_progress(
+                progress=3, total=3, message="The Colab UI is successfully connected!"
+            )
+            return ToolResult(
+                content=[TextContent(type="text", text="true")],
+                structured_content={"result": True},
+            )
+        else:
+            await context.fastmcp_context.report_progress(
+                progress=3,
+                total=3,
+                message="Timeout while waiting for the user to connect.",
+            )
+            return ToolResult(
+                content=[TextContent(type="text", text="false")],
+                structured_content={"result": False},
+            )
+
+
 async def check_session_proxy_tool_fn(ctx: Context = CurrentContext()) -> bool:
     fe_connected = ctx.get_state(FE_CONNECTED_KEY)
     token = ctx.get_state(PROXY_TOKEN_KEY)
@@ -163,7 +174,7 @@ async def check_session_proxy_tool_fn(ctx: Context = CurrentContext()) -> bool:
 check_session_proxy_tool = Tool.from_function(
     fn=check_session_proxy_tool_fn,
     name=INJECTED_TOOL_NAME,
-    description="Opens a connection to a Google Colab browser session. If the user is trying to edit a notebook in Google Colab, this needs to happen first. Returns True if the connection was successful and False if the connection failed",
+    description="Opens a connection to a Google Colab browser session and unlocks notebook editing tools. Returns a boolean representing whether the connection attempt succeeded",
 )
 
 
@@ -185,7 +196,7 @@ class ColabSessionProxy:
             instructions="Connects to a user's Google Colab session in a browser and allows for interactions with their Google Colab notebook",
         )
         # ColabProxyMiddleware must be first because it sets the fe_connected state
-        self.middleware.append(ColabProxyMiddleware(self.wss))
+        self.middleware.append(ColabProxyMiddleware(proxy_client))
         self.middleware.append(
             ToolInjectionMiddleware(tools=[check_session_proxy_tool])
         )

@@ -13,26 +13,19 @@
 # limitations under the License.
 
 import asyncio
-from colab_mcp import session, websocket_server
-from fastmcp import Client, FastMCP
+from colab_mcp import session
 from fastmcp.server.middleware import MiddlewareContext
 import pytest
-from unittest.mock import patch, call, AsyncMock, Mock
-
-TEST_PROXY_TOKEN = "test_token"
-TEST_PROXY_PORT = 1111
+from unittest.mock import patch, AsyncMock, Mock
 
 
 @pytest.fixture(autouse=True)
-def no_browser_open(monkeypatch):
+def mock_webbrowser(monkeypatch):
     import webbrowser
 
-    monkeypatch.setattr(webbrowser, "open_new", lambda *a, **k: True)
-
-
-@pytest.fixture(autouse=True)
-def instant_timeout(monkeypatch):
-    monkeypatch.setattr(session, "UI_CONNECTION_TIMEOUT", 0.1)
+    mock_open = Mock()
+    monkeypatch.setattr(webbrowser, "open_new", mock_open)
+    return mock_open
 
 
 @pytest.fixture
@@ -41,22 +34,13 @@ def mock_wss():
     return MockColabWebSocketServer()
 
 
-def assertExpectedContextCalls(mock_set_state, mock_wss):
-    expected_set_context_calls = [
-        call("fe_connected", mock_wss.connection_live.is_set()),
-        call("proxy_token", TEST_PROXY_TOKEN),
-        call("proxy_port", TEST_PROXY_PORT),
-    ]
-    mock_set_state.assert_has_calls(expected_set_context_calls)
-
-
 class MockColabWebSocketServer:
     def __init__(self):
         self.connection_live = asyncio.Event()
         self.read_stream = AsyncMock()
         self.write_stream = AsyncMock()
-        self.token = TEST_PROXY_TOKEN
-        self.port = TEST_PROXY_PORT
+        self.token = "test-token"
+        self.port = 1234
 
     async def __aenter__(self):
         return self
@@ -65,74 +49,140 @@ class MockColabWebSocketServer:
         pass
 
 
+@pytest.fixture
+def mock_proxy_client(mock_wss):
+    client = Mock(spec=session.ColabProxyClient)
+    client.wss = mock_wss
+    client.is_connected.return_value = False
+    return client
+
+
 class TestColabProxyMiddleware:
     @pytest.mark.asyncio
-    async def test_connection_live(self, mock_wss):
+    async def test_connection_live(self, mock_proxy_client):
         """Tests connection state change from disconnected to connected."""
-        mock_wss.connection_live.clear()
-        middleware = session.ColabProxyMiddleware(mock_wss)
-        mock_wss.connection_live.set()
+        middleware = session.ColabProxyMiddleware(mock_proxy_client)
+        mock_proxy_client.is_connected.return_value = True
         context = Mock(spec=MiddlewareContext)
         context.fastmcp_context.set_state = Mock()
-        context.fastmcp_context.send_prompt_list_changed = AsyncMock()
-        context.fastmcp_context.send_resource_list_changed = AsyncMock()
         context.fastmcp_context.send_tool_list_changed = AsyncMock()
         call_next = AsyncMock()
 
         await middleware.on_message(context, call_next)
 
-        assertExpectedContextCalls(context.fastmcp_context.set_state, mock_wss)
         call_next.assert_called_once_with(context)
+        context.fastmcp_context.set_state.assert_any_call("fe_connected", True)
+        context.fastmcp_context.set_state.assert_any_call("proxy_token", "test-token")
+        context.fastmcp_context.set_state.assert_any_call("proxy_port", 1234)
         assert middleware.last_message_connected is True
-        context.fastmcp_context.send_prompt_list_changed.assert_called_once()
-        context.fastmcp_context.send_resource_list_changed.assert_called_once()
         context.fastmcp_context.send_tool_list_changed.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_connection_not_live(self, mock_wss):
+    async def test_connection_not_live(self, mock_proxy_client):
         """Tests connection state change from connected to disconnected."""
-        mock_wss.connection_live.set()
-        middleware = session.ColabProxyMiddleware(mock_wss)
-        mock_wss.connection_live.clear()
+        mock_proxy_client.is_connected.return_value = True
+        middleware = session.ColabProxyMiddleware(mock_proxy_client)
+        mock_proxy_client.is_connected.return_value = False
         context = Mock(spec=MiddlewareContext)
         context.fastmcp_context.set_state = Mock()
-        context.fastmcp_context.send_prompt_list_changed = AsyncMock()
-        context.fastmcp_context.send_resource_list_changed = AsyncMock()
         context.fastmcp_context.send_tool_list_changed = AsyncMock()
         call_next = AsyncMock()
 
         await middleware.on_message(context, call_next)
 
-        assertExpectedContextCalls(context.fastmcp_context.set_state, mock_wss)
         call_next.assert_called_once_with(context)
+        context.fastmcp_context.set_state.assert_any_call("fe_connected", False)
         assert middleware.last_message_connected is False
-        context.fastmcp_context.send_prompt_list_changed.assert_called_once()
-        context.fastmcp_context.send_resource_list_changed.assert_called_once()
         context.fastmcp_context.send_tool_list_changed.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_no_connection_change(self, mock_wss):
+    async def test_no_connection_change(self, mock_proxy_client):
         """Tests no connection state change."""
-        mock_wss.connection_live.set()
-        middleware = session.ColabProxyMiddleware(mock_wss)
+        mock_proxy_client.is_connected.return_value = True
+        middleware = session.ColabProxyMiddleware(mock_proxy_client)
         context = Mock(spec=MiddlewareContext)
         context.fastmcp_context.set_state = Mock()
-        context.fastmcp_context.send_prompt_list_changed = AsyncMock()
-        context.fastmcp_context.send_resource_list_changed = AsyncMock()
         context.fastmcp_context.send_tool_list_changed = AsyncMock()
         call_next = AsyncMock()
 
         await middleware.on_message(context, call_next)
 
-        assertExpectedContextCalls(context.fastmcp_context.set_state, mock_wss)
         call_next.assert_called_once_with(context)
+        context.fastmcp_context.set_state.assert_any_call("fe_connected", True)
         assert middleware.last_message_connected is True
-        context.fastmcp_context.send_prompt_list_changed.assert_not_called()
-        context.fastmcp_context.send_resource_list_changed.assert_not_called()
         context.fastmcp_context.send_tool_list_changed.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_on_call_tool_await_connection(self, mock_proxy_client):
+        middleware = session.ColabProxyMiddleware(mock_proxy_client)
+        context = Mock()
+        context.fastmcp_context.report_progress = AsyncMock()
+        context.message.name = session.INJECTED_TOOL_NAME
+        mock_proxy_client.is_connected.side_effect = [False, True]
+        mock_proxy_client.await_proxy_connection = AsyncMock()
+        call_next = AsyncMock()
+
+        result = await middleware.on_call_tool(context, call_next)
+
+        mock_proxy_client.await_proxy_connection.assert_called_once()
+        context.fastmcp_context.report_progress.assert_called()
+        assert result.structured_content == {"result": True}
+
+    @pytest.mark.asyncio
+    async def test_on_call_tool_timeout(self, mock_proxy_client):
+        middleware = session.ColabProxyMiddleware(mock_proxy_client)
+        context = Mock()
+        context.fastmcp_context.report_progress = AsyncMock()
+        context.message.name = session.INJECTED_TOOL_NAME
+        mock_proxy_client.is_connected.return_value = False
+        mock_proxy_client.await_proxy_connection = AsyncMock()
+        call_next = AsyncMock()
+
+        result = await middleware.on_call_tool(context, call_next)
+
+        mock_proxy_client.await_proxy_connection.assert_called_once()
+        assert result.structured_content == {"result": False}
+
+
+class TestCheckSessionProxyToolFn:
+    @pytest.mark.asyncio
+    async def test_connected(self):
+        ctx = Mock()
+        ctx.get_state.side_effect = (
+            lambda k: True if k == session.FE_CONNECTED_KEY else None
+        )
+        assert await session.check_session_proxy_tool_fn(ctx) is True
+
+    @pytest.mark.asyncio
+    async def test_disconnected(self, mock_webbrowser):
+        ctx = Mock()
+
+        def get_state(k):
+            if k == session.FE_CONNECTED_KEY:
+                return False
+            if k == session.PROXY_TOKEN_KEY:
+                return "test-token"
+            if k == session.PROXY_PORT_KEY:
+                return 1234
+            return None
+
+        ctx.get_state.side_effect = get_state
+        assert await session.check_session_proxy_tool_fn(ctx) is False
+        mock_webbrowser.assert_called_once()
+        args, _ = mock_webbrowser.call_args
+        assert "mcpProxyToken=test-token" in args[0]
+        assert "mcpProxyPort=1234" in args[0]
 
 
 class TestColabProxyClient:
+    def test_is_connected(self, mock_wss):
+        client = session.ColabProxyClient(mock_wss)
+        assert client.is_connected() is False
+        mock_wss.connection_live.set()
+        assert client.is_connected() is False
+        client.proxy_mcp_client = Mock()
+        assert client.is_connected() is True
+
     def test_client_factory_connection_live(self, mock_wss):
         mock_wss.connection_live.set()
         client = session.ColabProxyClient(mock_wss)
@@ -143,6 +193,15 @@ class TestColabProxyClient:
     def test_client_factory_connection_not_live(self, mock_wss):
         client = session.ColabProxyClient(mock_wss)
         assert client.client_factory() is client.stubbed_mcp_client
+
+    @pytest.mark.asyncio
+    async def test_await_proxy_connection(self, mock_wss):
+        client = session.ColabProxyClient(mock_wss)
+        client._start_task = asyncio.create_task(asyncio.sleep(0.01))
+        mock_wss.connection_live.set()
+        with patch("colab_mcp.session.UI_CONNECTION_TIMEOUT", 0.1):
+            await client.await_proxy_connection()
+        await client._start_task
 
     @pytest.mark.asyncio
     @patch("colab_mcp.session.Client")
@@ -160,13 +219,30 @@ class TestColabProxyClient:
         mock_client.assert_called_with(mock_colab_transport.return_value)
 
 
+class TestColabTransport:
+    @pytest.mark.asyncio
+    @patch("colab_mcp.session.ClientSession")
+    async def test_connect_session(self, mock_client_session, mock_wss):
+        transport = session.ColabTransport(mock_wss)
+        mock_client_session.return_value.__aenter__ = AsyncMock()
+        async with transport.connect_session(foo="bar") as client_session:
+            assert (
+                client_session
+                == mock_client_session.return_value.__aenter__.return_value
+            )
+
+        mock_client_session.assert_called_once_with(
+            mock_wss.read_stream, mock_wss.write_stream, foo="bar"
+        )
+
+
 class TestColabSessionProxy:
     @pytest.mark.asyncio
     @patch("colab_mcp.session.ToolInjectionMiddleware")
     @patch("colab_mcp.session.ColabWebSocketServer")
     @patch("colab_mcp.session.ColabProxyClient")
     @patch("colab_mcp.session.ColabProxyMiddleware")
-    async def test_start_proxy_server_startup(
+    async def test_start_proxy_server(
         self,
         mock_colab_proxy_middleware,
         mock_colab_proxy_client,
@@ -182,49 +258,9 @@ class TestColabSessionProxy:
         mock_colab_proxy_middleware.assert_called_once()
         mock_tool_injection_middleware.assert_called_once()
 
-
-class TestCheckSessionProxyTool:
     @pytest.mark.asyncio
-    @patch("colab_mcp.session.webbrowser.open_new")
-    async def test_tool(self, mock_open, monkeypatch):
-        monkeypatch.setattr(
-            websocket_server.secrets,
-            "token_urlsafe",
-            lambda nbytes=None: TEST_PROXY_TOKEN,
-        )
-        testServer = FastMCP(name="test server")
-        session_mcp = session.ColabSessionProxy()
-        await session_mcp.start_proxy_server()
-        testServer.mount(session_mcp.proxy_server)
-        for middleware in session_mcp.middleware:
-            testServer.add_middleware(middleware)
-
-        async with Client(testServer) as testClient:
-            tools = await testClient.list_tools()
-            assert tools[0].name == "open_colab_browser_connection"
-            result = await testClient.call_tool("open_colab_browser_connection")
-            assert not result.structured_content["result"]  # is False
-        await session_mcp.cleanup()
-
-        mock_open.assert_called_once_with(
-            f"https://colab.google.com/notebooks/empty.ipynb#mcpProxyToken={TEST_PROXY_TOKEN}&mcpProxyPort={session_mcp.wss.port}"
-        )
-
-    @pytest.mark.asyncio
-    async def test_tool_middleware_injects_new_connection(self, mock_wss):
-        testServer = FastMCP(name="test server")
-        session_mcp = session.ColabSessionProxy()
-        await session_mcp.start_proxy_server()
-        testServer.mount(session_mcp.proxy_server)
-        for middleware in session_mcp.middleware:
-            testServer.add_middleware(middleware)
-
-        async with Client(testServer) as testClient:
-            tools = await testClient.list_tools()
-            assert tools[0].name == "open_colab_browser_connection"
-            result = testClient.call_tool("open_colab_browser_connection")
-            result_coroutine = testClient.call_tool("open_colab_browser_connection")
-            session_mcp.wss.connection_live.set()
-            result = await result_coroutine
-            assert result.structured_content["result"]  # is True
-        await session_mcp.cleanup()
+    async def test_cleanup(self):
+        proxy = session.ColabSessionProxy()
+        proxy._exit_stack = AsyncMock()
+        await proxy.cleanup()
+        proxy._exit_stack.aclose.assert_called_once()
