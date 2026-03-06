@@ -19,6 +19,8 @@ An MCP server for interacting with Colab.
 ...
 ```
 
+(If you have a non-standard default package index (**Googlers**), you may also need to add `--index https://pypi.org/simple`)
+
 ## Issues & Discussions
 
 We are using GitHub [discussions](https://github.com/googlecolab/colab-mcp/discussions) as the
