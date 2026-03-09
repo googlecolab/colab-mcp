@@ -21,11 +21,12 @@ import websockets
 
 
 @pytest.mark.asyncio
-async def test_successful_connection():
+@pytest.mark.parametrize("origin_domain", ["https://colab.google.com", "https://colab.research.google.com"])
+async def test_successful_connection(origin_domain):
     async with ColabWebSocketServer() as server:
         client = await websockets.connect(
             f"ws://localhost:{server.port}",
-            origin="https://colab.google.com",
+            origin=origin_domain,
             subprotocols=["mcp"],
             additional_headers={"Authorization": f"Bearer {server.token}"},
         )

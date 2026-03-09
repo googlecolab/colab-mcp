@@ -28,7 +28,8 @@ from websockets.http11 import Request, Response
 from websockets.typing import Subprotocol
 
 
-COLAB = "https://colab.google.com"
+COLAB = "https://colab.research.google.com"
+COLAB_ALT_DOMAIN = "https://colab.google.com"
 SCRATCH_PATH = "/notebooks/empty.ipynb"
 
 
@@ -43,7 +44,7 @@ class ColabWebSocketServer:
         self.port = 0
         self.connection_lock = asyncio.Lock()
         self.connection_live = asyncio.Event()
-        self.allowed_origins = [COLAB]
+        self.allowed_origins = [COLAB, COLAB_ALT_DOMAIN]
         self._server: websockets.Server | None = None
 
         self.read_stream: MemoryObjectReceiveStream[SessionMessage | Exception]
