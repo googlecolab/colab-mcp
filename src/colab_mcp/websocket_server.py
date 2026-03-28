@@ -17,6 +17,7 @@ from anyio.streams.memory import MemoryObjectReceiveStream, MemoryObjectSendStre
 import asyncio
 import logging
 import mcp.types as types
+import pathlib
 from mcp.shared.message import SessionMessage
 from pydantic_core import ValidationError
 import secrets
@@ -39,9 +40,9 @@ class ColabWebSocketServer:
     from a Google Colab session (colab.google.com).
     """
 
-    def __init__(self, host="localhost"):
+    def __init__(self, host="localhost", port=0):
         self.host = host
-        self.port = 0
+        self.port = port
         self.connection_lock = asyncio.Lock()
         self.connection_live = asyncio.Event()
         self.allowed_origins = [COLAB, COLAB_ALT_DOMAIN]
@@ -144,13 +145,19 @@ class ColabWebSocketServer:
         self._server = await websockets.serve(
             self._connection_handler,
             host=self.host,
-            port=0,
+            port=self.port,
             subprotocols=[Subprotocol("mcp")],
             origins=self.allowed_origins,
             process_request=self._validate_authorization,
         )
         self.port = self._server.sockets[0].getsockname()[1]
         logging.info(f"Starting WebSocket server on ws://{self.host}:{self.port}")
+        fragment = f"mcpProxyToken={self.token}&mcpProxyPort={self.port}"
+        self.connection_info_path = pathlib.Path("/tmp/colab-mcp-connection.txt")
+        self.connection_info_path.write_text(
+            f"#{fragment}\n{COLAB}{SCRATCH_PATH}#{fragment}\n"
+        )
+        logging.info(f"Connection info written to {self.connection_info_path}")
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
