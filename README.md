@@ -1,6 +1,15 @@
 # Colab-mcp
 
-An MCP server for interacting with Colab.
+An MCP server for bridging your local agent to a Colab session in the browser.
+
+# Supported Clients
+This MCP server requires client support for `notifications/tools/list_changed` and for the client to be running locally on your device. 
+
+Popular clients that fit these criteria include:
+- Gemini CLI
+- Claude Code
+- Windsurf
+
 
 # Setup
 
@@ -21,7 +30,7 @@ An MCP server for interacting with Colab.
 
 (If you have a non-standard default package index (**Googlers**), you may also need to add `--index https://pypi.org/simple`)
 
-## Issues & Discussions
+# Issues & Discussions
 
 We are using GitHub [discussions](https://github.com/googlecolab/colab-mcp/discussions) as the
 place for issue discussion and feature requests. As discussions mature into action items, we
@@ -29,7 +38,15 @@ will add those items as issues. This helps us ensure that issues in the issue tr
 well-understood, deduplicated, and actionable. For these reasons, **please do <u>NOT</u> open
 issues directly.** 
 
-## Internal - For Colab Developers
+# Contributing 
+We unfortunately don't have the bandwidth to support review of external contributions, and we 
+don't want user PRs to languish, so we aren't accepting any external contributions right now.
+
+If you have a great idea or pain point, we would love to hear about it on our 
+[discussions](https://github.com/googlecolab/colab-mcp/discussions) page - the preferred place 
+for issue discussion and feature requests.
+
+# Internal - For Colab Developers
 
 ### Prerequisites
 
