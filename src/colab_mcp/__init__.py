@@ -60,6 +60,12 @@ def parse_args(v):
         action="store_true",
         default=True,
     )
+    parser.add_argument(
+        "--port",
+        help="fixed port for the WebSocket server (default: random OS-assigned port).",
+        type=int,
+        default=0,
+    )
     return parser.parse_args(v)
 
 
@@ -69,7 +75,7 @@ async def main_async():
 
     if args.enable_proxy:
         logging.info("enabling session proxy tools")
-        session_mcp = ColabSessionProxy()
+        session_mcp = ColabSessionProxy(port=args.port)
         await session_mcp.start_proxy_server()
         mcp.mount(session_mcp.proxy_server)
         for middleware in session_mcp.middleware:

@@ -129,14 +129,17 @@ class ColabProxyMiddleware(Middleware):
             return result
         if self.proxy_client.is_connected():
             return result
-        # if the tool call was for open_colab_browser_connection and there is no existing connection, try to await full connection
-        await context.fastmcp_context.report_progress(
-            progress=1, total=3, message="The user is not connected to the Colab UI"
+        token = self.proxy_client.wss.token
+        port = self.proxy_client.wss.port
+        fragment = f"mcpProxyToken={token}&mcpProxyPort={port}"
+        connection_info = (
+            f"Not yet connected. Append this fragment to any Colab notebook URL:\n"
+            f"  #{fragment}\n"
+            f"Or open: {COLAB}{SCRATCH_PATH}#{fragment}\n"
+            f"Waiting up to 60s for connection..."
         )
         await context.fastmcp_context.report_progress(
-            progress=2,
-            total=3,
-            message="Waiting for user to connect in Colab - will wait for 60s",
+            progress=1, total=3, message=connection_info
         )
         await self.proxy_client.await_proxy_connection()
         if self.proxy_client.is_connected():
@@ -144,7 +147,7 @@ class ColabProxyMiddleware(Middleware):
                 progress=3, total=3, message="The Colab UI is successfully connected!"
             )
             return ToolResult(
-                content=[TextContent(type="text", text="true")],
+                content=[TextContent(type="text", text=connection_info + "\n\nConnected successfully!")],
                 structured_content={"result": True},
             )
         else:
@@ -154,40 +157,46 @@ class ColabProxyMiddleware(Middleware):
                 message="Timeout while waiting for the user to connect.",
             )
             return ToolResult(
-                content=[TextContent(type="text", text="false")],
+                content=[TextContent(type="text", text=connection_info + "\n\nTimeout — connection not established.")],
                 structured_content={"result": False},
             )
 
 
-async def check_session_proxy_tool_fn(ctx: Context = CurrentContext()) -> bool:
+async def check_session_proxy_tool_fn(ctx: Context = CurrentContext()) -> str:
     fe_connected = ctx.get_state(FE_CONNECTED_KEY)
     token = ctx.get_state(PROXY_TOKEN_KEY)
     port = ctx.get_state(PROXY_PORT_KEY)
     if fe_connected:
-        return True
-    webbrowser.open_new(
-        f"{COLAB}{SCRATCH_PATH}#mcpProxyToken={token}&mcpProxyPort={port}"
+        return "Connected to Colab session."
+    connection_fragment = f"mcpProxyToken={token}&mcpProxyPort={port}"
+    url = f"{COLAB}{SCRATCH_PATH}#{connection_fragment}"
+    webbrowser.open_new(url)
+    return (
+        f"Not yet connected. The user must open a Colab notebook with the MCP connection fragment appended to the URL.\n\n"
+        f"Connection fragment: #{connection_fragment}\n\n"
+        f"Default URL: {url}\n\n"
+        f"To use an existing notebook, append #{connection_fragment} to its URL."
     )
-    return False
 
 
 check_session_proxy_tool = Tool.from_function(
     fn=check_session_proxy_tool_fn,
     name=INJECTED_TOOL_NAME,
-    description="Opens a connection to a Google Colab browser session and unlocks notebook editing tools. Returns a boolean representing whether the connection attempt succeeded",
+    description="Opens a connection to a Google Colab browser session and unlocks notebook editing tools. Returns connection info including the URL fragment to append to any Colab notebook URL.",
 )
 
 
 class ColabSessionProxy:
-    def __init__(self):
+    def __init__(self, port=0):
         self._exit_stack = AsyncExitStack()
         self.proxy_server: FastMCPProxy | None = None
         # list order matters, see: https://gofastmcp.com/servers/middleware#multiple-middleware
         self.middleware: list[Middleware] = []
         self.wss: ColabWebSocketServer | None = None
+        self._port = port
 
     async def start_proxy_server(self):
-        self.wss = await self._exit_stack.enter_async_context(ColabWebSocketServer())
+        self.wss = await self._exit_stack.enter_async_context(ColabWebSocketServer(port=self._port))
         proxy_client = await self._exit_stack.enter_async_context(
             ColabProxyClient(self.wss)
         )
